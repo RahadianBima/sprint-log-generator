@@ -64,7 +64,10 @@ async function fetchConfluenceSpaces() {
 
 async function fetchConfluencePages(spaceKey) {
   var res = await fetch('/api/confluence?action=pages&spaceKey=' + spaceKey);
-  if (!res.ok) return [];
+  if (!res.ok) {
+    var err = await res.json().catch(function(){ return {error:'Unknown error'}; });
+    throw new Error(err.error || 'Gagal fetch pages');
+  }
   var data = await res.json();
   return data.pages || [];
 }
@@ -566,6 +569,12 @@ export default function App() {
   var pagesState = useState([]);
   var pages = pagesState[0];
   var setPages = pagesState[1];
+  var pagesLoadingState = useState(false);
+  var pagesLoading = pagesLoadingState[0];
+  var setPagesLoading = pagesLoadingState[1];
+  var pagesErrorState = useState('');
+  var pagesError = pagesErrorState[0];
+  var setPagesError = pagesErrorState[1];
   var selectedParentState = useState('51160186939');
   var selectedParent = selectedParentState[0];
   var setSelectedParent = selectedParentState[1];
@@ -580,12 +589,32 @@ export default function App() {
   }, []);
 
   // Fetch pages when space changes (for parent page selector)
+  function doFetchPages(spaceKey) {
+    if (!spaceKey) return;
+    setPagesLoading(true);
+    setPagesError('');
+    setPages([]);
+    fetchConfluencePages(spaceKey)
+      .then(function (p) {
+        setPages(p);
+      })
+      .catch(function (err) {
+        setPagesError(err.message);
+      })
+      .finally(function () {
+        setPagesLoading(false);
+      });
+  }
+
   useEffect(function () {
-    if (!selectedSpace) return;
-    fetchConfluencePages(selectedSpace).then(function (p) {
-      setPages(p);
-    });
+    doFetchPages(selectedSpace);
   }, [selectedSpace]);
+
+  // Also refetch when entering step 4
+  useEffect(function () {
+    if (step !== 4) return;
+    doFetchPages(selectedSpace);
+  }, [step]);
 
   // Auto-fetch goals when entering step 2
   useEffect(
@@ -1264,12 +1293,21 @@ export default function App() {
                   <select
                     value={selectedParent}
                     onChange={function(e){ setSelectedParent(e.target.value); }}
+                    disabled={pagesLoading || !!pagesError}
                     style={{
                       width:'100%', padding:'8px 10px', borderRadius:6, border:'1px solid #DFE1E6',
-                      fontSize:13, background:'#fff', color:'#172B4D',
+                      fontSize:13, background: pagesLoading ? '#F4F5F7' : '#fff', color:'#172B4D',
                     }}
                   >
-                    {pages.map(function(p){ return <option key={p.id} value={p.id}>{p.title}</option>; })}
+                    {pagesLoading ? (
+                      <option value="">Loading...</option>
+                    ) : pagesError ? (
+                      <option value="">Error: {pagesError}</option>
+                    ) : pages.length === 0 ? (
+                      <option value="">No pages found in this space</option>
+                    ) : (
+                      pages.map(function(p){ return <option key={p.id} value={p.id}>{p.title}</option>; })
+                    )}
                   </select>
                 </div>
               </div>
