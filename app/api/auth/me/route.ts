@@ -19,7 +19,6 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       authenticated: true,
-      email: payload.email,
       name: payload.name,
       picture: payload.picture,
     });

@@ -65,96 +65,42 @@ export async function GET(request: Request) {
     const tokenData = await tokenRes.json();
     const accessToken = tokenData.access_token;
 
-    // Try multiple ways to get user email
-    let email = '';
-    let name = '';
+    // Get user info
+    let name = 'User';
     let picture = '';
+    let accountId = '';
 
-    // Get accessible resources (cloud IDs)
+    // Decode access token JWT for account ID
+    try {
+      const payload = JSON.parse(atob(accessToken.split('.')[1]));
+      accountId = payload.sub || '';
+    } catch {}
+
+    // Try to get user name from accessible resources or /me
     const resources = await tryFetch('https://api.atlassian.com/oauth/token/accessible-resources', accessToken);
     const cloudId = resources?.[0]?.id || '';
 
-    // Method 1: Try Jira REST API /user/current
     if (cloudId) {
       const jiraUser = await tryFetch(
         `https://api.atlassian.com/ex/jira/${cloudId}/rest/api/3/user/current`,
         accessToken
       );
       if (jiraUser) {
-        email = jiraUser.emailAddress || '';
-        name = jiraUser.displayName || '';
+        name = jiraUser.displayName || jiraUser.name || 'User';
         picture = jiraUser.avatarUrls?.['48x48'] || '';
       }
     }
 
-    // Method 2: Try Jira user search by accountId (returns email with read:jira-work)
-    if (!email && cloudId) {
-      const accountId = resources?.[0]?.id || '';
-      // Get account ID from token
-      let accId = '';
-      try {
-        const payload = JSON.parse(atob(accessToken.split('.')[1]));
-        accId = payload.sub || '';
-      } catch {}
-      if (accId) {
-        const userDetail = await tryFetch(
-          `https://api.atlassian.com/ex/jira/${cloudId}/rest/api/3/user?accountId=${accId}&expand=email`,
-          accessToken
-        );
-        if (userDetail) {
-          email = userDetail.emailAddress || '';
-          name = name || userDetail.displayName || '';
-          picture = picture || userDetail.avatarUrls?.['48x48'] || '';
-        }
-      }
-    }
-
-    // Method 3: api.atlassian.com/me
-    if (!email) {
+    if (!picture) {
       const meData = await tryFetch('https://api.atlassian.com/me', accessToken);
       if (meData) {
-        email = meData.email || '';
-        name = name || meData.name || meData.nickname || '';
-        picture = picture || meData.picture || '';
+        name = name || meData.name || meData.nickname || 'User';
+        picture = meData.picture || '';
       }
     }
 
-    // Method 4: Decode access token JWT - only use if value looks like email
-    if (!email || !email.includes('@')) {
-      try {
-        const payload = JSON.parse(atob(accessToken.split('.')[1]));
-        if (payload.email && payload.email.includes('@')) email = payload.email;
-        if (!name) name = payload.name || '';
-      } catch {}
-    }
-
-    if (!email) {
-      return new Response(
-        '<html><body style="font-family:sans-serif;padding:40px;text-align:center">' +
-        '<h2>Gagal Mendapatkan Email</h2>' +
-        '<p>Tidak bisa membaca profil pengguna dari Atlassian. Coba lagi atau hubungi admin.</p>' +
-        '<a href="/" style="color:#0052CC">Kembali</a></body></html>',
-        { status: 500, headers: { 'Content-Type': 'text/html' } }
-      );
-    }
-
-    // Extract name from email if not found
-    if (!name) name = email.split('@')[0];
-
-    // Verify @mekari
-    if (!email.endsWith('@mekari.com')) {
-      return new Response(
-        '<html><body style="font-family:sans-serif;padding:40px;text-align:center">' +
-        '<h2>Akses Ditolak</h2>' +
-        '<p>Hanya pengguna dengan email <strong>@mekari.com</strong> yang dapat mengakses aplikasi ini.</p>' +
-        '<p>Email Anda: ' + email + '</p>' +
-        '<a href="/" style="color:#0052CC">Kembali</a></body></html>',
-        { status: 403, headers: { 'Content-Type': 'text/html' } }
-      );
-    }
-
-    // Create JWT session
-    const sessionToken = await new SignJWT({ email, name, picture })
+    // Create JWT session (no email restriction - anyone who can auth is allowed)
+    const sessionToken = await new SignJWT({ name, picture, accountId })
       .setProtectedHeader({ alg: 'HS256' })
       .setIssuedAt()
       .setExpirationTime('24h')
