@@ -20,12 +20,51 @@ async function conFetch(url: string, options: any = {}) {
   return { ok: res.ok, status: res.status, data };
 }
 
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const action = searchParams.get('action');
+    const baseUrl = process.env.JIRA_BASE_URL || 'https://jurnal.atlassian.net';
+
+    // Fetch spaces
+    if (action === 'spaces') {
+      const res = await conFetch(`${baseUrl}/wiki/rest/api/space?limit=100`);
+      if (!res.ok) return NextResponse.json({ error: 'Gagal fetch spaces' }, { status: 500 });
+      return NextResponse.json({
+        spaces: (res.data.results || []).map((s: any) => ({
+          key: s.key,
+          name: s.name,
+        })),
+      });
+    }
+
+    // Fetch pages in a space (for parent page selection)
+    if (action === 'pages') {
+      const spaceKey = searchParams.get('spaceKey') || 'PD';
+      const res = await conFetch(
+        `${baseUrl}/wiki/rest/api/content?spaceKey=${spaceKey}&type=page&limit=100&orderby=-id`
+      );
+      if (!res.ok) return NextResponse.json({ error: 'Gagal fetch pages' }, { status: 500 });
+      return NextResponse.json({
+        pages: (res.data.results || []).map((p: any) => ({
+          id: p.id,
+          title: p.title,
+        })),
+      });
+    }
+
+    return NextResponse.json({ error: 'action tidak dikenal' }, { status: 400 });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
 export async function POST(request: Request) {
   try {
-    const { title, body } = await request.json();
+    const { title, body, spaceKey: reqSpaceKey, parentId: reqParentId } = await request.json();
     const baseUrl = process.env.JIRA_BASE_URL || 'https://jurnal.atlassian.net';
-    const spaceKey = process.env.CONFLUENCE_SPACE_KEY || 'PD';
-    const parentId = process.env.CONFLUENCE_PARENT_ID || '';
+    const spaceKey = reqSpaceKey || process.env.CONFLUENCE_SPACE_KEY || 'PD';
+    const parentId = reqParentId || process.env.CONFLUENCE_PARENT_ID || '';
 
     const email = process.env.JIRA_USER_EMAIL || '';
     const token = process.env.JIRA_API_TOKEN || '';

@@ -55,6 +55,20 @@ async function fetchSprintReport(boardId, sprintId) {
   return res.json();
 }
 
+async function fetchConfluenceSpaces() {
+  var res = await fetch('/api/confluence?action=spaces');
+  if (!res.ok) return [];
+  var data = await res.json();
+  return data.spaces || [];
+}
+
+async function fetchConfluencePages(spaceKey) {
+  var res = await fetch('/api/confluence?action=pages&spaceKey=' + spaceKey);
+  if (!res.ok) return [];
+  var data = await res.json();
+  return data.pages || [];
+}
+
 // ── Anthropic API ──────────────────────────────────────────────────────────────
 async function anthropic(system, user, maxTokens) {
   var res = await fetch('/api/anthropic', {
@@ -543,8 +557,35 @@ export default function App() {
   var sprintReportState = useState(null);
   var sprintReport = sprintReportState[0];
   var setSprintReport = sprintReportState[1];
+  var spacesState = useState([]);
+  var spaces = spacesState[0];
+  var setSpaces = spacesState[1];
+  var selectedSpaceState = useState('PD');
+  var selectedSpace = selectedSpaceState[0];
+  var setSelectedSpace = selectedSpaceState[1];
+  var pagesState = useState([]);
+  var pages = pagesState[0];
+  var setPages = pagesState[1];
+  var selectedParentState = useState('51160186939');
+  var selectedParent = selectedParentState[0];
+  var setSelectedParent = selectedParentState[1];
 
   var team = TEAM_CONFIG[pk];
+
+  // Fetch Confluence spaces on mount
+  useEffect(function () {
+    fetchConfluenceSpaces().then(function (s) {
+      setSpaces(s);
+    });
+  }, []);
+
+  // Fetch pages when space changes (for parent page selector)
+  useEffect(function () {
+    if (!selectedSpace) return;
+    fetchConfluencePages(selectedSpace).then(function (p) {
+      setPages(p);
+    });
+  }, [selectedSpace]);
 
   // Auto-fetch goals when entering step 2
   useEffect(
@@ -715,7 +756,7 @@ export default function App() {
     fetch('/api/confluence', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: title, body: body }),
+      body: JSON.stringify({ title: title, body: body, spaceKey: selectedSpace, parentId: selectedParent }),
     })
       .then(function (res) {
         if (!res.ok) return res.json().then(function (d) { throw new Error(d.error || 'Gagal'); });
@@ -750,6 +791,8 @@ export default function App() {
     setRawGoals('');
     setSprintId(null);
     setSprintReport(null);
+    setSelectedSpace('PD');
+    setSelectedParent('51160186939');
   }
 
   if (authLoading) {
@@ -1195,6 +1238,39 @@ export default function App() {
                   }}
                 >
                   {goals.length} Goals
+                </div>
+              </div>
+            </Card>
+            <Card style={{ marginBottom: 14 }}>
+              <h3 style={{ margin:'0 0 10px', fontSize:14, fontWeight:700, color:'#172B4D' }}>
+                Confluence Destination
+              </h3>
+              <div style={{ display:'flex', gap:10, marginBottom:10 }}>
+                <div style={{ flex:1 }}>
+                  <label style={{ fontSize:11, color:'#6B778C', display:'block', marginBottom:4 }}>Space</label>
+                  <select
+                    value={selectedSpace}
+                    onChange={function(e){ setSelectedSpace(e.target.value); }}
+                    style={{
+                      width:'100%', padding:'8px 10px', borderRadius:6, border:'1px solid #DFE1E6',
+                      fontSize:13, background:'#fff', color:'#172B4D',
+                    }}
+                  >
+                    {spaces.map(function(s){ return <option key={s.key} value={s.key}>{s.key} - {s.name}</option>; })}
+                  </select>
+                </div>
+                <div style={{ flex:1 }}>
+                  <label style={{ fontSize:11, color:'#6B778C', display:'block', marginBottom:4 }}>Parent Page</label>
+                  <select
+                    value={selectedParent}
+                    onChange={function(e){ setSelectedParent(e.target.value); }}
+                    style={{
+                      width:'100%', padding:'8px 10px', borderRadius:6, border:'1px solid #DFE1E6',
+                      fontSize:13, background:'#fff', color:'#172B4D',
+                    }}
+                  >
+                    {pages.map(function(p){ return <option key={p.id} value={p.id}>{p.title}</option>; })}
+                  </select>
                 </div>
               </div>
             </Card>
