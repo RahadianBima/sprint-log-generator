@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 const PARENT_ID = '51160186939';
 const JIRA_BASE = 'https://jurnal.atlassian.net';
@@ -600,25 +600,31 @@ export default function App() {
     });
   }, []);
 
+  var fetchRef = useRef(0);
+
   // Fetch pages when space changes (for parent page selector)
   function doFetchPages(spaceKey) {
     if (!spaceKey) return;
+    fetchRef.current++;
+    var thisFetch = fetchRef.current;
     setPagesLoading(true);
     setPagesError('');
     setPages([]);
     fetchConfluencePages(spaceKey)
       .then(function (p) {
+        if (thisFetch !== fetchRef.current) return;
         setPages(p);
+        setPagesLoading(false);
       })
       .catch(function (err) {
+        if (thisFetch !== fetchRef.current) return;
         setPagesError(err.message);
-      })
-      .finally(function () {
         setPagesLoading(false);
       });
   }
 
   useEffect(function () {
+    setPagesSearch('');
     doFetchPages(selectedSpace);
   }, [selectedSpace]);
 
