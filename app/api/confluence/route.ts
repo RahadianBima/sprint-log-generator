@@ -43,20 +43,24 @@ export async function GET(request: Request) {
       const spaceKey = searchParams.get('spaceKey') || 'PD';
       var allPages: any[] = [];
       var nextUrl = `${baseUrl}/wiki/api/v2/pages?spaceKey=${encodeURIComponent(spaceKey)}&limit=250`;
-      for (var i = 0; i < 10; i++) {
-        const res = await conFetch(nextUrl);
-        if (!res.ok) return NextResponse.json({ error: 'Gagal fetch pages: ' + (res.data?.message || JSON.stringify(res.data).slice(0,300)) }, { status: 500 });
-        allPages = allPages.concat(res.data.results || []);
-        nextUrl = res.data._links?.next;
-        if (!nextUrl) break;
-        if (!nextUrl.startsWith('http')) nextUrl = `${baseUrl}${nextUrl}`;
+      // sort by id (ascending) so top-level pages come first
+      const res = await conFetch(nextUrl + '&sort=id');
+      if (!res.ok) {
+        // fallback: try without sort
+        const fb = await conFetch(nextUrl);
+        if (!fb.ok) return NextResponse.json({ error: 'Gagal: ' + (res.data?.message || JSON.stringify(res.data).slice(0,150)) + ' | ' + (fb.data?.message || JSON.stringify(fb.data).slice(0,150)) }, { status: 500 });
+        return NextResponse.json({ pages: (fb.data.results || []).map((p: any) => ({ id: p.id, title: p.title })) });
       }
-      return NextResponse.json({
-        pages: allPages.map((p: any) => ({
-          id: p.id,
-          title: p.title,
-        })),
-      });
+      allPages = allPages.concat(res.data.results || []);
+      var next = res.data._links?.next;
+      for (var i = 0; i < 5 && next; i++) {
+        var pgUrl = next.startsWith('http') ? next : `${baseUrl}${next}`;
+        const pg = await conFetch(pgUrl);
+        if (!pg.ok) break;
+        allPages = allPages.concat(pg.data.results || []);
+        next = pg.data._links?.next;
+      }
+      return NextResponse.json({ pages: allPages.map((p: any) => ({ id: p.id, title: p.title })) });
     }
 
     return NextResponse.json({ error: 'action tidak dikenal' }, { status: 400 });
