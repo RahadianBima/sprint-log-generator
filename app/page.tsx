@@ -764,10 +764,12 @@ export default function App() {
     return (
       <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#F4F5F7', fontFamily:'Inter,-apple-system,sans-serif' }}>
         <div style={{ textAlign:'center', maxWidth:400 }}>
+          <div style={{ textAlign:'right', marginBottom:16 }}>
+            {user === null ? '' : <a href="/api/auth/logout" style={{ fontSize:12, color:'#97A0AF', textDecoration:'none' }}>Logout</a>}
+          </div>
           <h1 style={{ color:'#172B4D', fontSize:28, margin:'0 0 8px' }}>Sprint Log Generator</h1>
           <p style={{ color:'#6B778C', fontSize:14, margin:'0 0 24px', lineHeight:1.5 }}>
-            Generate sprint log ke Confluence secara otomatis.<br />
-            Gunakan akun Atlassian <strong>@mekari.com</strong> untuk login.
+            Generate sprint log ke Confluence secara otomatis.
           </p>
           <a
             href="/api/auth/login"
