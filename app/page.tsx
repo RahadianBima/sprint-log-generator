@@ -112,6 +112,9 @@ async function anthropicJSON(systemPrompt, userPrompt) {
 }
 
 // ── Build Confluence HTML ──────────────────────────────────────────────────────
+function escapeHTML(str) {
+  return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
 function buildHTML(goals, sprintReport) {
   function col(s) {
     if (s === 'achieved') return 'green';
@@ -236,6 +239,22 @@ function buildHTML(goals, sprintReport) {
     '</tr></thead><tbody>' +
     rows +
     '</tbody></table>' +
+    '<h2>Tickets</h2>' +
+    goals.map(function(g){
+      return '<h3>' + escapeHTML(g.text) + '</h3><ul>' +
+        (g.tickets || []).map(function(t){
+          var st = '<li><strong>' + t.key + '</strong> ' + (t.issuetype || '') + ' — ' + (escapeHTML(t.summary || '').slice(0,80)) + ' [' + t.status + ']</li>';
+          if (t.subtasks && t.subtasks.length > 0) {
+            st += '<ul style="color:#5E6C84">' +
+              t.subtasks.map(function(s){
+                return '<li>' + s.key + ' — ' + (escapeHTML(s.summary || '').slice(0,60)) + ' [' + s.status + ']</li>';
+              }).join('') +
+            '</ul>';
+          }
+          return st;
+        }).join('') +
+      '</ul>';
+    }).join('') +
     '<h2>Issues and Escalation</h2>' +
     '<table><thead><tr>' +
     '<th><p><strong>No</strong></p></th><th><p><strong>Issue/Situation</strong></p></th>' +
@@ -464,9 +483,7 @@ function GoalCard(props) {
         }}
       />
       {goal.tickets && goal.tickets.length > 0 && (
-        <div
-          style={{ marginTop: 8, display: 'flex', gap: 5, flexWrap: 'wrap' }}
-        >
+        <div style={{ marginTop: 8, display: 'flex', flexDirection:'column', gap: 4 }}>
           {goal.tickets.map(function (t) {
             var tbg =
               t.statusCategory === 'done'
@@ -481,19 +498,34 @@ function GoalCard(props) {
                 ? '#6B778C'
                 : '#974F0C';
             return (
-              <span
-                key={t.key}
-                style={{
-                  fontSize: 11,
-                  padding: '2px 8px',
-                  borderRadius: 4,
-                  fontWeight: 500,
-                  background: tbg,
-                  color: tc,
-                }}
-              >
-                {t.key} · {t.status}
-              </span>
+              <div key={t.key} style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
+                <span
+                  style={{
+                    fontSize: 11,
+                    padding: '2px 8px',
+                    borderRadius: 4,
+                    fontWeight: 500,
+                    background: tbg,
+                    color: tc,
+                  }}
+                >
+                  {t.key} · {t.status} {t.issuetype ? '(' + t.issuetype + ')' : ''}
+                </span>
+                {t.subtasks && t.subtasks.length > 0 && (
+                  <span style={{ fontSize:10, color:'#6B778C', display:'flex', gap:4, flexWrap:'wrap' }}>
+                    →
+                    {t.subtasks.map(function (s) {
+                      var sbg = s.statusCategory === 'done' ? '#E3FCEF' : s.statusCategory === 'new' ? '#F4F5F7' : '#FFFAE6';
+                      var sc = s.statusCategory === 'done' ? '#006644' : s.statusCategory === 'new' ? '#6B778C' : '#974F0C';
+                      return (
+                        <span key={s.key} style={{ fontSize:10, padding:'1px 6px', borderRadius:3, background:sbg, color:sc }}>
+                          {s.key}
+                        </span>
+                      );
+                    })}
+                  </span>
+                )}
+              </div>
             );
           })}
         </div>
@@ -726,9 +758,10 @@ export default function App() {
           issues
             .slice(0, 80)
             .map(function (t) {
+              var parent = t.parentKey ? ' parent=' + t.parentKey : '';
               return (
                 t.key +
-                ':[' +
+                ' (' + t.issuetype + parent + '):[' +
                 t.statusCategory +
                 '] ' +
                 (t.summary || '').slice(0, 55)
@@ -752,9 +785,9 @@ export default function App() {
             'Sprint analyst. Return ONLY minified JSON no whitespace no markdown.',
             'Goals:\n' +
               goalStr +
-              '\nTickets:\n' +
+              '\nTickets (each has key, type=Story/Task/Subtask, parentKey):\n' +
               ticketLines +
-              '\nFor each goal: find relevant ticketKeys, derive status(achieved/partially achieved/not achieved/invalid), 1-sentence Bahasa Indonesia comment.' +
+              '\nFor each goal: find relevant ticketKeys (stories and their subtasks), derive status(achieved/partially achieved/not achieved/invalid), 1-sentence English comment.' +
               '\nReturn: {"goals":[{"text":"...","status":"...","ticketKeys":["' +
               pk +
               '-1"],"comment":"..."}]}'
@@ -823,6 +856,12 @@ export default function App() {
         setCreatedUrl(result.pageUrl);
         setStep(5);
         setLoading(false);
+        // Cache the result
+        try {
+          var cache = JSON.parse(localStorage.getItem('sprint_cache') || '{}');
+          cache[sprintId] = { url: result.pageUrl, title: title, sprintName: sprintInfo.name, team: sprintInfo.team, createdAt: new Date().toISOString() };
+          localStorage.setItem('sprint_cache', JSON.stringify(cache));
+        } catch (e) {}
       })
       .catch(function (err) {
         setError('Gagal buat halaman: ' + err.message);
@@ -1297,6 +1336,19 @@ export default function App() {
                   {goals.length} Goals
                 </div>
               </div>
+              {sprintId && (function(){
+                var cache;
+                try { cache = JSON.parse(localStorage.getItem('sprint_cache') || '{}'); } catch(e) { cache = {}; }
+                var existing = cache[sprintId];
+                if (!existing) return null;
+                return (
+                  <div style={{ marginTop:10, padding:'8px 12px', background:'#FFF0B3', borderRadius:6, fontSize:12, color:'#172B4D' }}>
+                    ⚠ Sprint ini sudah pernah dipublikasikan:{' '}
+                    <a href={existing.url} target="_blank" rel="noopener noreferrer" style={{ color:'#0052CC', textDecoration:'underline' }}>{existing.title}</a>
+                    {' '}— {new Date(existing.createdAt).toLocaleDateString()}
+                  </div>
+                );
+              })()}
             </Card>
             <Card style={{ marginBottom: 14 }}>
               <h3 style={{ margin:'0 0 10px', fontSize:14, fontWeight:700, color:'#172B4D' }}>

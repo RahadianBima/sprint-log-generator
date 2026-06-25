@@ -30,8 +30,9 @@ export async function GET(request: Request) {
     if (action === 'issues') {
       const sprintId = searchParams.get('sprintId');
       if (!sprintId) throw new Error('Parameter sprintId diperlukan');
+      const fields = 'summary,status,customfield_10005,issuetype,parent,subtasks';
       const data = await jiraFetch(
-        `${baseUrl}/rest/agile/1.0/sprint/${sprintId}/issue?fields=summary,status,customfield_10005&maxResults=100`
+        `${baseUrl}/rest/agile/1.0/sprint/${sprintId}/issue?fields=${fields}&maxResults=100`
       );
       return NextResponse.json({
         issues: (data.issues || []).map((i: any) => ({
@@ -40,6 +41,14 @@ export async function GET(request: Request) {
           status: i.fields.status.name,
           statusCategory: i.fields.status.statusCategory?.key || 'new',
           storyPoints: i.fields.customfield_10005 || 0,
+          issuetype: i.fields.issuetype?.name || '',
+          parentKey: i.fields.parent?.key || null,
+          subtasks: (i.fields.subtasks || []).map((s: any) => ({
+            key: s.key,
+            summary: s.fields?.summary || '',
+            status: s.fields?.status?.name || '',
+            statusCategory: s.fields?.status?.statusCategory?.key || 'new',
+          })),
         })),
       });
     }
@@ -47,8 +56,9 @@ export async function GET(request: Request) {
     if (action === 'jql') {
       const jql = searchParams.get('jql');
       if (!jql) throw new Error('Parameter jql diperlukan');
+      const fields = 'summary,status,customfield_10005,issuetype,parent,subtasks';
       const data = await jiraFetch(
-        `${baseUrl}/rest/agile/1.0/issue/search?jql=${encodeURIComponent(jql)}&fields=summary,status,customfield_10005&maxResults=100`
+        `${baseUrl}/rest/agile/1.0/issue/search?jql=${encodeURIComponent(jql)}&fields=${fields}&maxResults=100`
       );
       return NextResponse.json({
         issues: (data.issues || []).map((i: any) => ({
@@ -57,6 +67,14 @@ export async function GET(request: Request) {
           status: i.fields.status.name,
           statusCategory: i.fields.status.statusCategory?.key || 'new',
           storyPoints: i.fields.customfield_10005 || 0,
+          issuetype: i.fields.issuetype?.name || '',
+          parentKey: i.fields.parent?.key || null,
+          subtasks: (i.fields.subtasks || []).map((s: any) => ({
+            key: s.key,
+            summary: s.fields?.summary || '',
+            status: s.fields?.status?.name || '',
+            statusCategory: s.fields?.status?.statusCategory?.key || 'new',
+          })),
         })),
       });
     }
