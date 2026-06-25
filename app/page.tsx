@@ -1325,7 +1325,7 @@ export default function App() {
                             var sel = s.key === selectedSpace;
                             return (
                               <div key={s.key}
-                                onClick={function(){ setSelectedSpace(s.key); setSpacesOpen(false); setSpacesSearch(''); }}
+                                onClick={function(){ setSelectedSpace(s.key); setSpacesOpen(false); setSpacesSearch(''); doFetchPages(s.key); }}
                                 style={{
                                   padding:'8px 12px', fontSize:13, cursor:'pointer',
                                   background: sel ? '#E8F0FE' : '#fff', color: sel ? '#0052CC' : '#172B4D',

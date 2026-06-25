@@ -38,29 +38,31 @@ export async function GET(request: Request) {
       });
     }
 
-    // Fetch ALL pages in a space (with pagination, using v2 API)
+    // Fetch ALL pages in a space via CQL search (reliable across all Confluence instances)
     if (action === 'pages') {
       const spaceKey = searchParams.get('spaceKey') || 'PD';
       var allPages: any[] = [];
-      var nextUrl = `${baseUrl}/wiki/api/v2/pages?spaceKey=${encodeURIComponent(spaceKey)}&limit=250`;
-      // sort by id (ascending) so top-level pages come first
-      const res = await conFetch(nextUrl + '&sort=id');
+      var cql = `space=${encodeURIComponent(spaceKey)} AND type=page`;
+      var searchUrl = `${baseUrl}/wiki/rest/api/search?cql=${encodeURIComponent(cql)}&limit=250`;
+      // sort by id (ascending) so top-level pages come first (doesn't work on all instances, best effort)
+      const res = await conFetch(searchUrl + '&sort=id');
       if (!res.ok) {
         // fallback: try without sort
-        const fb = await conFetch(nextUrl);
+        const fb = await conFetch(searchUrl);
         if (!fb.ok) return NextResponse.json({ error: 'Gagal: ' + (res.data?.message || JSON.stringify(res.data).slice(0,150)) + ' | ' + (fb.data?.message || JSON.stringify(fb.data).slice(0,150)) }, { status: 500 });
-        return NextResponse.json({ pages: (fb.data.results || []).map((p: any) => ({ id: p.id, title: p.title })) });
+        allPages = fb.data.results || [];
+      } else {
+        allPages = res.data.results || [];
+        var next = res.data._links?.next;
+        for (var i = 0; i < 5 && next; i++) {
+          var pgUrl = next.startsWith('http') ? next : `${baseUrl}${next}`;
+          const pg = await conFetch(pgUrl);
+          if (!pg.ok) break;
+          allPages = allPages.concat(pg.data.results || []);
+          next = pg.data._links?.next;
+        }
       }
-      allPages = allPages.concat(res.data.results || []);
-      var next = res.data._links?.next;
-      for (var i = 0; i < 5 && next; i++) {
-        var pgUrl = next.startsWith('http') ? next : `${baseUrl}${next}`;
-        const pg = await conFetch(pgUrl);
-        if (!pg.ok) break;
-        allPages = allPages.concat(pg.data.results || []);
-        next = pg.data._links?.next;
-      }
-      return NextResponse.json({ pages: allPages.map((p: any) => ({ id: p.id, title: p.title })) });
+      return NextResponse.json({ pages: allPages.map((p: any) => ({ id: p.content.id, title: p.title })) });
     }
 
     return NextResponse.json({ error: 'action tidak dikenal' }, { status: 400 });
