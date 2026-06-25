@@ -26,43 +26,48 @@ export async function GET(request: Request) {
     const action = searchParams.get('action');
     const baseUrl = process.env.JIRA_BASE_URL || 'https://jurnal.atlassian.net';
 
-    // Fetch spaces
+    // Fetch spaces (v2 API to get IDs)
     if (action === 'spaces') {
-      const res = await conFetch(`${baseUrl}/wiki/rest/api/space?type=global&limit=100`);
+      const res = await conFetch(`${baseUrl}/wiki/api/v2/spaces?type=global&limit=250`);
       if (!res.ok) return NextResponse.json({ error: 'Gagal fetch spaces' }, { status: 500 });
       return NextResponse.json({
         spaces: (res.data.results || []).map((s: any) => ({
           key: s.key,
           name: s.name,
+          id: s.id,
         })),
       });
     }
 
-    // Fetch ALL pages in a space via CQL search (reliable across all Confluence instances)
+    // Fetch ALL pages in a space (v2 API: /spaces/{spaceId}/pages)
     if (action === 'pages') {
       const spaceKey = searchParams.get('spaceKey') || 'PD';
-      var allPages: any[] = [];
-      var cql = `space=${encodeURIComponent(spaceKey)} AND type=page`;
-      var searchUrl = `${baseUrl}/wiki/rest/api/search?cql=${encodeURIComponent(cql)}&limit=250`;
-      // sort by id (ascending) so top-level pages come first (doesn't work on all instances, best effort)
-      const res = await conFetch(searchUrl + '&sort=id');
-      if (!res.ok) {
-        // fallback: try without sort
-        const fb = await conFetch(searchUrl);
-        if (!fb.ok) return NextResponse.json({ error: 'Gagal: ' + (res.data?.message || JSON.stringify(res.data).slice(0,150)) + ' | ' + (fb.data?.message || JSON.stringify(fb.data).slice(0,150)) }, { status: 500 });
-        allPages = fb.data.results || [];
-      } else {
-        allPages = res.data.results || [];
-        var next = res.data._links?.next;
-        for (var i = 0; i < 5 && next; i++) {
-          var pgUrl = next.startsWith('http') ? next : `${baseUrl}${next}`;
-          const pg = await conFetch(pgUrl);
-          if (!pg.ok) break;
-          allPages = allPages.concat(pg.data.results || []);
-          next = pg.data._links?.next;
-        }
+      // Resolve spaceKey → spaceId via v2 API (keys filter is supported)
+      const spaceRes = await conFetch(`${baseUrl}/wiki/api/v2/spaces?keys=${encodeURIComponent(spaceKey)}&limit=1`);
+      if (!spaceRes.ok) {
+        return NextResponse.json({ error: 'Gagal cari space ID: ' + (spaceRes.data?.message || JSON.stringify(spaceRes.data).slice(0,150)) }, { status: 500 });
       }
-      return NextResponse.json({ pages: allPages.map((p: any) => ({ id: p.content.id, title: p.title })) });
+      const spaceId = spaceRes.data.results?.[0]?.id;
+      if (!spaceId) {
+        return NextResponse.json({ error: 'Space tidak ditemukan: ' + spaceKey }, { status: 404 });
+      }
+      var allPages: any[] = [];
+      var nextUrl = `${baseUrl}/wiki/api/v2/spaces/${spaceId}/pages?limit=250`;
+      // sort by id (ascending) so top-level pages come first
+      const res = await conFetch(nextUrl + '&sort=id');
+      if (!res.ok) {
+        return NextResponse.json({ error: 'Gagal: ' + (res.data?.message || JSON.stringify(res.data).slice(0,150)) }, { status: 500 });
+      }
+      allPages = allPages.concat(res.data.results || []);
+      var next = res.data._links?.next;
+      for (var i = 0; i < 5 && next; i++) {
+        var pgUrl = next.startsWith('http') ? next : `${baseUrl}${next}`;
+        const pg = await conFetch(pgUrl);
+        if (!pg.ok) break;
+        allPages = allPages.concat(pg.data.results || []);
+        next = pg.data._links?.next;
+      }
+      return NextResponse.json({ pages: allPages.map((p: any) => ({ id: p.id, title: p.title })) });
     }
 
     return NextResponse.json({ error: 'action tidak dikenal' }, { status: 400 });
