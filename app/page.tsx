@@ -908,9 +908,8 @@ export default function App() {
     return (
       <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#F4F5F7', fontFamily:'Inter,-apple-system,sans-serif' }}>
         <div style={{ textAlign:'center', maxWidth:400 }}>
-          <div style={{ display:'flex', justifyContent:'flex-end', gap:12, marginBottom:16 }}>
+          <div style={{ textAlign:'right', marginBottom:16 }}>
             {user === null ? '' : <a href="/api/auth/logout" style={{ fontSize:12, color:'#97A0AF', textDecoration:'none' }}>Logout</a>}
-            <a href="/kanban" style={{ fontSize:12, color:'#0052CC', textDecoration:'none', fontWeight:600 }}>Kanban Mode &rarr;</a>
           </div>
           <h1 style={{ color:'#172B4D', fontSize:28, margin:'0 0 8px' }}>Sprint Log Generator</h1>
           <p style={{ color:'#6B778C', fontSize:14, margin:'0 0 24px', lineHeight:1.5 }}>
@@ -978,31 +977,17 @@ export default function App() {
               Auto-generate Sprint Log Confluence · A&T Tribe
             </p>
           </div>
-          <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-            <a
-              href="/kanban"
-              style={{
-                fontSize: 12,
-                color: '#0052CC',
-                textDecoration: 'none',
-                whiteSpace: 'nowrap',
-                fontWeight: 600,
-              }}
-            >
-              Kanban Mode
-            </a>
-            <a
-              href="/api/auth/logout"
-              style={{
-                fontSize: 12,
-                color: '#97A0AF',
-                textDecoration: 'none',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              Logout
-            </a>
-          </div>
+          <a
+            href="/api/auth/logout"
+            style={{
+              fontSize: 12,
+              color: '#97A0AF',
+              textDecoration: 'none',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Logout
+          </a>
         </div>
 
         <Steps cur={step} />
