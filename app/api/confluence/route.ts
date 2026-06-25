@@ -52,7 +52,7 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'Space tidak ditemukan: ' + spaceKey }, { status: 404 });
       }
       var allPages: any[] = [];
-      var nextUrl = `${baseUrl}/wiki/api/v2/spaces/${spaceId}/pages?limit=250&status=current,draft,archived,trashed`;
+      var nextUrl = `${baseUrl}/wiki/api/v2/spaces/${spaceId}/pages?limit=250`;
       const res = await conFetch(nextUrl);
       if (!res.ok) {
         return NextResponse.json({ error: 'Gagal: ' + (res.data?.message || JSON.stringify(res.data).slice(0,150)) }, { status: 500 });
