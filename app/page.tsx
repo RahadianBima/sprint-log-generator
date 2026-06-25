@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 
 const PARENT_ID = '51160186939';
 const JIRA_BASE = 'https://jurnal.atlassian.net';
@@ -644,15 +644,21 @@ export default function App() {
     }
     setPagesLoading(true);
     setPagesError('');
-    searchConfluencePages(selectedSpace, value).then(function (p) {
-      console.log('search results:', p.length, p);
-      setPages(p);
-    }).catch(function (err) {
-      console.error('search error:', err);
-      setPagesError(err.message);
-    }).finally(function () {
-      setPagesLoading(false);
-    });
+    setPages([]);
+    fetch('/api/confluence?action=searchPages&spaceKey=' + encodeURIComponent(selectedSpace) + '&query=' + encodeURIComponent(value))
+      .then(function (r) {
+        if (!r.ok) throw new Error('Search failed');
+        return r.json();
+      })
+      .then(function (data) {
+        setPages(data.pages || []);
+      })
+      .catch(function (err) {
+        setPagesError(err.message);
+      })
+      .finally(function () {
+        setPagesLoading(false);
+      });
   }
 
   // Auto-fetch goals when entering step 2
