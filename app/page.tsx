@@ -1349,7 +1349,7 @@ export default function App() {
                   <label style={{ fontSize:11, color:'#6B778C', display:'block', marginBottom:4 }}>Parent Page</label>
                   <div>
                     <input
-                      value={pagesOpen ? pagesSearch : (pages.find(function(p){ return p.id === selectedParent; }) || {}).title || ''}
+                      value={pagesLoading ? 'Loading...' : (pagesOpen ? pagesSearch : (pages.find(function(p){ return p.id === selectedParent; }) || {}).title || '')}
                       onChange={function(e){ handlePagesSearchInput(e.target.value); }}
                       onFocus={function(){ setPagesOpen(true); }}
                       onBlur={function(){ setTimeout(function(){ setPagesOpen(false); }, 150); }}
