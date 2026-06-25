@@ -635,8 +635,6 @@ export default function App() {
     doFetchPages(selectedSpace);
   }, [step]);
 
-  var searchTimer = useRef(null);
-
   function handlePagesSearchInput(value) {
     setPagesSearch(value);
     setPagesOpen(true);
@@ -644,18 +642,17 @@ export default function App() {
       doFetchPages(selectedSpace);
       return;
     }
-    if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(function () {
-      setPagesLoading(true);
-      setPagesError('');
-      searchConfluencePages(selectedSpace, value).then(function (p) {
-        setPages(p);
-      }).catch(function (err) {
-        setPagesError(err.message);
-      }).finally(function () {
-        setPagesLoading(false);
-      });
-    }, 300);
+    setPagesLoading(true);
+    setPagesError('');
+    searchConfluencePages(selectedSpace, value).then(function (p) {
+      console.log('search results:', p.length, p);
+      setPages(p);
+    }).catch(function (err) {
+      console.error('search error:', err);
+      setPagesError(err.message);
+    }).finally(function () {
+      setPagesLoading(false);
+    });
   }
 
   // Auto-fetch goals when entering step 2
