@@ -69,7 +69,7 @@ async function fetchConfluencePages(spaceKey) {
     throw new Error(err.error || 'Gagal fetch pages');
   }
   var data = await res.json();
-  return data.pages || [];
+  return { pages: data.pages || [], total: data.total || 0 };
 }
 
 // ── Anthropic API ──────────────────────────────────────────────────────────────
@@ -575,6 +575,9 @@ export default function App() {
   var pagesErrorState = useState('');
   var pagesError = pagesErrorState[0];
   var setPagesError = pagesErrorState[1];
+  var pagesTotalState = useState(0);
+  var pagesTotal = pagesTotalState[0];
+  var setPagesTotal = pagesTotalState[1];
   var pagesSearchState = useState('');
   var pagesSearch = pagesSearchState[0];
   var setPagesSearch = pagesSearchState[1];
@@ -610,10 +613,12 @@ export default function App() {
     setPagesLoading(true);
     setPagesError('');
     setPages([]);
+    setPagesTotal(0);
     fetchConfluencePages(spaceKey)
       .then(function (p) {
         if (thisFetch !== fetchRef.current) return;
-        setPages(p);
+        setPages(p.pages);
+        setPagesTotal(p.total);
         setPagesLoading(false);
       })
       .catch(function (err) {
@@ -1367,7 +1372,9 @@ export default function App() {
                         ) : pages.filter(function(p){ return !pagesSearch || p.title.toLowerCase().indexOf(pagesSearch.toLowerCase()) !== -1; }).length === 0 ? (
                           <div style={{ padding:'10px 12px', fontSize:12, color:'#97A0AF' }}>No pages found</div>
                         ) : (
-                          pages.filter(function(p){ return !pagesSearch || p.title.toLowerCase().indexOf(pagesSearch.toLowerCase()) !== -1; }).map(function(p){
+                          <>
+                          <div style={{ padding:'6px 12px', fontSize:11, color:'#6B778C', borderBottom:'1px solid #F4F5F7' }}>{pages.filter(function(p){ return !pagesSearch || p.title.toLowerCase().indexOf(pagesSearch.toLowerCase()) !== -1; }).length} pages (total: {pagesTotal})</div>
+                          {pages.filter(function(p){ return !pagesSearch || p.title.toLowerCase().indexOf(pagesSearch.toLowerCase()) !== -1; }).map(function(p){
                             var sel = p.id === selectedParent;
                             return (
                               <div key={p.id}

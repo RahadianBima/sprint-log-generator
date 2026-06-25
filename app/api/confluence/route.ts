@@ -52,22 +52,21 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'Space tidak ditemukan: ' + spaceKey }, { status: 404 });
       }
       var allPages: any[] = [];
-      var nextUrl = `${baseUrl}/wiki/api/v2/spaces/${spaceId}/pages?limit=250`;
-      // sort by id (ascending) so top-level pages come first
-      const res = await conFetch(nextUrl + '&sort=id');
+      var nextUrl = `${baseUrl}/wiki/api/v2/spaces/${spaceId}/pages?limit=250&status=current,draft,archived,trashed`;
+      const res = await conFetch(nextUrl);
       if (!res.ok) {
         return NextResponse.json({ error: 'Gagal: ' + (res.data?.message || JSON.stringify(res.data).slice(0,150)) }, { status: 500 });
       }
       allPages = allPages.concat(res.data.results || []);
       var next = res.data._links?.next;
-      for (var i = 0; i < 5 && next; i++) {
+      for (var i = 0; i < 20 && next; i++) {
         var pgUrl = next.startsWith('http') ? next : `${baseUrl}${next}`;
         const pg = await conFetch(pgUrl);
         if (!pg.ok) break;
         allPages = allPages.concat(pg.data.results || []);
         next = pg.data._links?.next;
       }
-      return NextResponse.json({ pages: allPages.map((p: any) => ({ id: p.id, title: p.title })) });
+      return NextResponse.json({ pages: allPages.map((p: any) => ({ id: p.id, title: p.title })), total: allPages.length });
     }
 
     return NextResponse.json({ error: 'action tidak dikenal' }, { status: 400 });
