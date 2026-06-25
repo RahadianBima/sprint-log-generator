@@ -70,45 +70,61 @@ export async function GET(request: Request) {
     let name = '';
     let picture = '';
 
-    // Method 1: api.atlassian.com/me
-    const meData = await tryFetch('https://api.atlassian.com/me', accessToken);
-    if (meData) {
-      email = meData.email || '';
-      name = meData.name || meData.nickname || '';
-      picture = meData.picture || '';
-    }
+    // Get accessible resources (cloud IDs)
+    const resources = await tryFetch('https://api.atlassian.com/oauth/token/accessible-resources', accessToken);
+    const cloudId = resources?.[0]?.id || '';
 
-    // Method 2: auth.atlassian.com/userinfo
-    if (!email) {
-      const userInfo = await tryFetch('https://auth.atlassian.com/userinfo', accessToken);
-      if (userInfo) {
-        email = userInfo.email || userInfo.sub || '';
-        name = name || userInfo.name || userInfo.nickname || '';
+    // Method 1: Try Jira REST API /user/current
+    if (cloudId) {
+      const jiraUser = await tryFetch(
+        `https://api.atlassian.com/ex/jira/${cloudId}/rest/api/3/user/current`,
+        accessToken
+      );
+      if (jiraUser) {
+        email = jiraUser.emailAddress || '';
+        name = jiraUser.displayName || '';
+        picture = jiraUser.avatarUrls?.['48x48'] || '';
       }
     }
 
-    // Method 3: Jira REST API user/current
-    if (!email) {
-      const resources = await tryFetch('https://api.atlassian.com/oauth/token/accessible-resources', accessToken);
-      if (resources && resources[0]?.id) {
-        const jiraUser = await tryFetch(
-          `https://api.atlassian.com/ex/jira/${resources[0].id}/rest/api/3/user/current`,
+    // Method 2: Try Jira user search by accountId (returns email with read:jira-work)
+    if (!email && cloudId) {
+      const accountId = resources?.[0]?.id || '';
+      // Get account ID from token
+      let accId = '';
+      try {
+        const payload = JSON.parse(atob(accessToken.split('.')[1]));
+        accId = payload.sub || '';
+      } catch {}
+      if (accId) {
+        const userDetail = await tryFetch(
+          `https://api.atlassian.com/ex/jira/${cloudId}/rest/api/3/user?accountId=${accId}&expand=email`,
           accessToken
         );
-        if (jiraUser) {
-          email = jiraUser.emailAddress || '';
-          name = name || jiraUser.displayName || '';
-          picture = picture || jiraUser.avatarUrls?.['48x48'] || '';
+        if (userDetail) {
+          email = userDetail.emailAddress || '';
+          name = name || userDetail.displayName || '';
+          picture = picture || userDetail.avatarUrls?.['48x48'] || '';
         }
       }
     }
 
-    // Method 4: Decode access token JWT
+    // Method 3: api.atlassian.com/me
     if (!email) {
+      const meData = await tryFetch('https://api.atlassian.com/me', accessToken);
+      if (meData) {
+        email = meData.email || '';
+        name = name || meData.name || meData.nickname || '';
+        picture = picture || meData.picture || '';
+      }
+    }
+
+    // Method 4: Decode access token JWT - only use if value looks like email
+    if (!email || !email.includes('@')) {
       try {
         const payload = JSON.parse(atob(accessToken.split('.')[1]));
-        email = payload.email || payload.sub || '';
-        name = name || payload.name || '';
+        if (payload.email && payload.email.includes('@')) email = payload.email;
+        if (!name) name = payload.name || '';
       } catch {}
     }
 
