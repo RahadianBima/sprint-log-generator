@@ -793,11 +793,12 @@ export default function App() {
       }}
     >
       <div style={{ maxWidth: 700, margin: '0 auto' }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
             marginBottom: 24,
           }}
         >
@@ -829,6 +830,17 @@ export default function App() {
             <p style={{ margin: 0, fontSize: 12, color: '#6B778C' }}>
               Auto-generate Sprint Log Confluence · A&T Tribe
             </p>
+            <a
+              href="/api/auth/logout"
+              style={{
+                fontSize: 12,
+                color: '#97A0AF',
+                textDecoration: 'none',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Logout
+            </a>
           </div>
         </div>
 
