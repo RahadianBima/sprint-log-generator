@@ -42,14 +42,14 @@ export async function GET(request: Request) {
     if (action === 'pages') {
       const spaceKey = searchParams.get('spaceKey') || 'PD';
       var allPages: any[] = [];
-      var nextUrl = `${baseUrl}/wiki/api/v2/pages?spaceKey=${encodeURIComponent(spaceKey)}&limit=100`;
+      var nextUrl = `${baseUrl}/wiki/api/v2/pages?spaceKey=${encodeURIComponent(spaceKey)}&limit=250`;
       for (var i = 0; i < 10; i++) {
         const res = await conFetch(nextUrl);
-        if (!res.ok) return NextResponse.json({ error: 'Gagal fetch pages: ' + (res.data?.message || JSON.stringify(res.data)) }, { status: 500 });
+        if (!res.ok) return NextResponse.json({ error: 'Gagal fetch pages: ' + (res.data?.message || JSON.stringify(res.data).slice(0,300)) }, { status: 500 });
         allPages = allPages.concat(res.data.results || []);
         nextUrl = res.data._links?.next;
         if (!nextUrl) break;
-        nextUrl = nextUrl.startsWith('http') ? nextUrl : `${baseUrl}${nextUrl}`;
+        if (!nextUrl.startsWith('http')) nextUrl = `${baseUrl}${nextUrl}`;
       }
       return NextResponse.json({
         pages: allPages.map((p: any) => ({
