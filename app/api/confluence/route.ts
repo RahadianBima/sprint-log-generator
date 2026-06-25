@@ -38,11 +38,11 @@ export async function GET(request: Request) {
       });
     }
 
-    // Fetch ALL pages in a space (with pagination)
+    // Fetch ALL pages in a space (with pagination, using v2 API)
     if (action === 'pages') {
       const spaceKey = searchParams.get('spaceKey') || 'PD';
       var allPages: any[] = [];
-      var nextUrl = `${baseUrl}/wiki/rest/api/content?spaceKey=${encodeURIComponent(spaceKey)}&type=page&limit=100`;
+      var nextUrl = `${baseUrl}/wiki/api/v2/pages?spaceKey=${encodeURIComponent(spaceKey)}&limit=100`;
       for (var i = 0; i < 10; i++) {
         const res = await conFetch(nextUrl);
         if (!res.ok) return NextResponse.json({ error: 'Gagal fetch pages: ' + (res.data?.message || JSON.stringify(res.data)) }, { status: 500 });
