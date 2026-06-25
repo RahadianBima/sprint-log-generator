@@ -581,6 +581,12 @@ export default function App() {
   var pagesOpenState = useState(false);
   var pagesOpen = pagesOpenState[0];
   var setPagesOpen = pagesOpenState[1];
+  var spacesSearchState = useState('');
+  var spacesSearch = spacesSearchState[0];
+  var setSpacesSearch = spacesSearchState[1];
+  var spacesOpenState = useState(false);
+  var spacesOpen = spacesOpenState[0];
+  var setSpacesOpen = spacesOpenState[1];
   var selectedParentState = useState('51160186939');
   var selectedParent = selectedParentState[0];
   var setSelectedParent = selectedParentState[1];
@@ -1281,18 +1287,47 @@ export default function App() {
                 Confluence Destination
               </h3>
               <div style={{ display:'flex', gap:10, marginBottom:10 }}>
-                <div style={{ flex:1 }}>
+                <div style={{ flex:1, position:'relative' }}>
                   <label style={{ fontSize:11, color:'#6B778C', display:'block', marginBottom:4 }}>Space</label>
-                  <select
-                    value={selectedSpace}
-                    onChange={function(e){ setSelectedSpace(e.target.value); }}
-                    style={{
-                      width:'100%', padding:'8px 10px', borderRadius:6, border:'1px solid #DFE1E6',
-                      fontSize:13, background:'#fff', color:'#172B4D',
-                    }}
-                  >
-                    {spaces.map(function(s){ return <option key={s.key} value={s.key}>{s.key} - {s.name}</option>; })}
-                  </select>
+                  <div>
+                    <input
+                      value={spacesOpen ? spacesSearch : ((spaces.find(function(s){ return s.key === selectedSpace; }) || {}).key || selectedSpace) + ' - ' + ((spaces.find(function(s){ return s.key === selectedSpace; }) || {}).name || '')}
+                      onChange={function(e){ setSpacesSearch(e.target.value); setSpacesOpen(true); }}
+                      onFocus={function(){ setSpacesOpen(true); }}
+                      onBlur={function(){ setTimeout(function(){ setSpacesOpen(false); }, 150); }}
+                      placeholder="Search space..."
+                      style={{
+                        width:'100%', padding:'8px 10px', borderRadius:6, border:'1px solid #DFE1E6',
+                        fontSize:13, color:'#172B4D', boxSizing:'border-box',
+                      }}
+                    />
+                    {spacesOpen && (
+                      <div style={{
+                        position:'absolute', top:'100%', left:0, right:0, maxHeight:220, overflowY:'auto',
+                        background:'#fff', border:'1px solid #DFE1E6', borderRadius:6, marginTop:2,
+                        zIndex:10, boxShadow:'0 4px 12px rgba(0,0,0,0.1)',
+                      }}>
+                        {spaces.filter(function(s){ return (s.key + ' ' + s.name).toLowerCase().indexOf(spacesSearch.toLowerCase()) !== -1; }).length === 0 ? (
+                          <div style={{ padding:'10px 12px', fontSize:12, color:'#97A0AF' }}>No spaces found</div>
+                        ) : (
+                          spaces.filter(function(s){ return (s.key + ' ' + s.name).toLowerCase().indexOf(spacesSearch.toLowerCase()) !== -1; }).map(function(s){
+                            var sel = s.key === selectedSpace;
+                            return (
+                              <div key={s.key}
+                                onClick={function(){ setSelectedSpace(s.key); setSpacesOpen(false); setSpacesSearch(''); }}
+                                style={{
+                                  padding:'8px 12px', fontSize:13, cursor:'pointer',
+                                  background: sel ? '#E8F0FE' : '#fff', color: sel ? '#0052CC' : '#172B4D',
+                                  fontWeight: sel ? 600 : 400,
+                                  borderBottom:'1px solid #F4F5F7',
+                                }}
+                              >{s.key} - {s.name}</div>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div style={{ flex:1, position:'relative' }}>
                   <label style={{ fontSize:11, color:'#6B778C', display:'block', marginBottom:4 }}>Parent Page</label>
