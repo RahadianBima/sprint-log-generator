@@ -44,7 +44,7 @@ export async function GET(request: Request) {
       const res = await conFetch(
         `${baseUrl}/wiki/rest/api/content?spaceKey=${spaceKey}&type=page&limit=100&orderby=-id`
       );
-      if (!res.ok) return NextResponse.json({ error: 'Gagal fetch pages' }, { status: 500 });
+      if (!res.ok) return NextResponse.json({ error: 'Gagal fetch pages: ' + (res.data?.message || JSON.stringify(res.data)) }, { status: 500 });
       return NextResponse.json({
         pages: (res.data.results || []).map((p: any) => ({
           id: p.id,
