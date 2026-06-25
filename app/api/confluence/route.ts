@@ -38,33 +38,22 @@ export async function GET(request: Request) {
       });
     }
 
-    // Fetch pages in a space (for parent page selection)
+    // Fetch ALL pages in a space (with pagination)
     if (action === 'pages') {
       const spaceKey = searchParams.get('spaceKey') || 'PD';
-      const res = await conFetch(
-        `${baseUrl}/wiki/rest/api/content?spaceKey=${encodeURIComponent(spaceKey)}&type=page&limit=200`
-      );
-      if (!res.ok) return NextResponse.json({ error: 'Gagal fetch pages: ' + (res.data?.message || JSON.stringify(res.data)) }, { status: 500 });
+      var allPages: any[] = [];
+      var nextUrl = `${baseUrl}/wiki/rest/api/content?spaceKey=${encodeURIComponent(spaceKey)}&type=page&limit=100`;
+      for (var i = 0; i < 10; i++) {
+        const res = await conFetch(nextUrl);
+        if (!res.ok) return NextResponse.json({ error: 'Gagal fetch pages: ' + (res.data?.message || JSON.stringify(res.data)) }, { status: 500 });
+        allPages = allPages.concat(res.data.results || []);
+        nextUrl = res.data._links?.next;
+        if (!nextUrl) break;
+        nextUrl = nextUrl.startsWith('http') ? nextUrl : `${baseUrl}${nextUrl}`;
+      }
       return NextResponse.json({
-        pages: (res.data.results || []).map((p: any) => ({
+        pages: allPages.map((p: any) => ({
           id: p.id,
-          title: p.title,
-        })),
-      });
-    }
-
-    // Search pages via CQL (dynamic, finds any page by title)
-    if (action === 'searchPages') {
-      const spaceKey = searchParams.get('spaceKey') || 'PD';
-      const query = searchParams.get('query') || '';
-      const cql = `space=${spaceKey} AND type=page${query ? ` AND title~"${query}"` : ''}`;
-      const res = await conFetch(
-        `${baseUrl}/wiki/rest/api/search?cql=${encodeURIComponent(cql)}&limit=50`
-      );
-      if (!res.ok) return NextResponse.json({ error: 'Gagal search pages: ' + (res.data?.message || JSON.stringify(res.data)) }, { status: 500 });
-      return NextResponse.json({
-        pages: (res.data.results || []).map((p: any) => ({
-          id: p.content.id,
           title: p.title,
         })),
       });

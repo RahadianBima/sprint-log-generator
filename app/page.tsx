@@ -72,13 +72,6 @@ async function fetchConfluencePages(spaceKey) {
   return data.pages || [];
 }
 
-async function searchConfluencePages(spaceKey, query) {
-  var res = await fetch('/api/confluence?action=searchPages&spaceKey=' + spaceKey + '&query=' + encodeURIComponent(query));
-  if (!res.ok) return [];
-  var data = await res.json();
-  return data.pages || [];
-}
-
 // ── Anthropic API ──────────────────────────────────────────────────────────────
 async function anthropic(system, user, maxTokens) {
   var res = await fetch('/api/anthropic', {
@@ -638,27 +631,6 @@ export default function App() {
   function handlePagesSearchInput(value) {
     setPagesSearch(value);
     setPagesOpen(true);
-    if (!value.trim()) {
-      doFetchPages(selectedSpace);
-      return;
-    }
-    setPagesLoading(true);
-    setPagesError('');
-    setPages([]);
-    fetch('/api/confluence?action=searchPages&spaceKey=' + encodeURIComponent(selectedSpace) + '&query=' + encodeURIComponent(value))
-      .then(function (r) {
-        if (!r.ok) throw new Error('Search failed');
-        return r.json();
-      })
-      .then(function (data) {
-        setPages(data.pages || []);
-      })
-      .catch(function (err) {
-        setPagesError(err.message);
-      })
-      .finally(function () {
-        setPagesLoading(false);
-      });
   }
 
   // Auto-fetch goals when entering step 2
@@ -1364,51 +1336,49 @@ export default function App() {
                 </div>
                 <div style={{ flex:1, position:'relative' }}>
                   <label style={{ fontSize:11, color:'#6B778C', display:'block', marginBottom:4 }}>Parent Page</label>
-                  {pagesLoading ? (
-                    <div style={{ padding:'8px 10px', fontSize:13, color:'#97A0AF', background:'#F4F5F7', borderRadius:6, border:'1px solid #DFE1E6' }}>Loading...</div>
-                  ) : pagesError ? (
-                    <div style={{ padding:'8px 10px', fontSize:13, color:'#BF2600', background:'#FFEBE6', borderRadius:6, border:'1px solid #FFBDAD' }}>Error: {pagesError}</div>
-                  ) : (
-                    <div>
-                      <input
-                        value={pagesOpen ? pagesSearch : (pages.find(function(p){ return p.id === selectedParent; }) || {}).title || ''}
-                        onChange={function(e){ handlePagesSearchInput(e.target.value); }}
-                        onFocus={function(){ setPagesOpen(true); }}
-                        onBlur={function(){ setTimeout(function(){ setPagesOpen(false); }, 150); }}
-                        placeholder="Search page..."
-                        style={{
-                          width:'100%', padding:'8px 10px', borderRadius:6, border:'1px solid #DFE1E6',
-                          fontSize:13, color:'#172B4D', boxSizing:'border-box',
-                        }}
-                      />
-                      {pagesOpen && (
-                        <div style={{
-                          position:'absolute', top:'100%', left:0, right:0, maxHeight:220, overflowY:'auto',
-                          background:'#fff', border:'1px solid #DFE1E6', borderRadius:6, marginTop:2,
-                          zIndex:10, boxShadow:'0 4px 12px rgba(0,0,0,0.1)',
-                        }}>
-                          {pages.length === 0 ? (
-                            <div style={{ padding:'10px 12px', fontSize:12, color:'#97A0AF' }}>No pages found</div>
-                          ) : (
-                            pages.map(function(p){
-                              var sel = p.id === selectedParent;
-                              return (
-                                <div key={p.id}
-                                  onClick={function(){ setSelectedParent(p.id); setPagesOpen(false); setPagesSearch(''); }}
-                                  style={{
-                                    padding:'8px 12px', fontSize:13, cursor:'pointer',
-                                    background: sel ? '#E8F0FE' : '#fff', color: sel ? '#0052CC' : '#172B4D',
-                                    fontWeight: sel ? 600 : 400,
-                                    borderBottom:'1px solid #F4F5F7',
-                                  }}
-                                >{p.title}</div>
-                              );
-                            })
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  <div>
+                    <input
+                      value={pagesOpen ? pagesSearch : (pages.find(function(p){ return p.id === selectedParent; }) || {}).title || ''}
+                      onChange={function(e){ handlePagesSearchInput(e.target.value); }}
+                      onFocus={function(){ setPagesOpen(true); }}
+                      onBlur={function(){ setTimeout(function(){ setPagesOpen(false); }, 150); }}
+                      placeholder="Search page..."
+                      style={{
+                        width:'100%', padding:'8px 10px', borderRadius:6, border:'1px solid #DFE1E6',
+                        fontSize:13, color:'#172B4D', boxSizing:'border-box',
+                      }}
+                    />
+                    {pagesOpen && (
+                      <div style={{
+                        position:'absolute', top:'100%', left:0, right:0, maxHeight:220, overflowY:'auto',
+                        background:'#fff', border:'1px solid #DFE1E6', borderRadius:6, marginTop:2,
+                        zIndex:10, boxShadow:'0 4px 12px rgba(0,0,0,0.1)',
+                      }}>
+                        {pagesLoading ? (
+                          <div style={{ padding:'10px 12px', fontSize:12, color:'#97A0AF' }}>Loading...</div>
+                        ) : pagesError ? (
+                          <div style={{ padding:'10px 12px', fontSize:12, color:'#BF2600' }}>Error: {pagesError}</div>
+                        ) : pages.filter(function(p){ return !pagesSearch || p.title.toLowerCase().indexOf(pagesSearch.toLowerCase()) !== -1; }).length === 0 ? (
+                          <div style={{ padding:'10px 12px', fontSize:12, color:'#97A0AF' }}>No pages found</div>
+                        ) : (
+                          pages.filter(function(p){ return !pagesSearch || p.title.toLowerCase().indexOf(pagesSearch.toLowerCase()) !== -1; }).map(function(p){
+                            var sel = p.id === selectedParent;
+                            return (
+                              <div key={p.id}
+                                onClick={function(){ setSelectedParent(p.id); setPagesOpen(false); setPagesSearch(''); }}
+                                style={{
+                                  padding:'8px 12px', fontSize:13, cursor:'pointer',
+                                  background: sel ? '#E8F0FE' : '#fff', color: sel ? '#0052CC' : '#172B4D',
+                                  fontWeight: sel ? 600 : 400,
+                                  borderBottom:'1px solid #F4F5F7',
+                                }}
+                              >{p.title}</div>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </Card>
