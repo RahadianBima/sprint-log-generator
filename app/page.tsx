@@ -511,19 +511,24 @@ function GoalCard(props) {
                 >
                   {t.key} · {t.status} {t.issuetype ? '(' + t.issuetype + ')' : ''}
                 </span>
+                <span style={{ fontSize:11, color:'#172B4D' }}>
+                  {(t.summary || '').slice(0, 60)}
+                </span>
                 {t.subtasks && t.subtasks.length > 0 && (
-                  <span style={{ fontSize:10, color:'#6B778C', display:'flex', gap:4, flexWrap:'wrap' }}>
-                    →
+                  <div style={{ fontSize:10, color:'#6B778C', display:'flex', flexDirection:'column', gap:2, marginLeft:16 }}>
                     {t.subtasks.map(function (s) {
                       var sbg = s.statusCategory === 'done' ? '#E3FCEF' : s.statusCategory === 'new' ? '#F4F5F7' : '#FFFAE6';
                       var sc = s.statusCategory === 'done' ? '#006644' : s.statusCategory === 'new' ? '#6B778C' : '#974F0C';
                       return (
-                        <span key={s.key} style={{ fontSize:10, padding:'1px 6px', borderRadius:3, background:sbg, color:sc }}>
-                          {s.key}
-                        </span>
+                        <div key={s.key} style={{ display:'flex', alignItems:'center', gap:4 }}>
+                          <span style={{ padding:'1px 6px', borderRadius:3, background:sbg, color:sc }}>
+                            {s.key}
+                          </span>
+                          <span style={{ color:'#5E6C84' }}>{(s.summary || '').slice(0, 50)}</span>
+                        </div>
                       );
                     })}
-                  </span>
+                  </div>
                 )}
               </div>
             );
