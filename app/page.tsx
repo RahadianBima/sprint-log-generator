@@ -25,7 +25,7 @@ async function fetchActiveSprintViaProxy(boardId) {
   var res = await fetch('/api/jira?boardId=' + boardId);
   if (!res.ok) {
     var errData = await res.json();
-    throw new Error(errData.error || 'Gagal mengambil data dari Jira Server');
+    throw new Error(errData.error || 'Failed to fetch data from Jira Server');
   }
   var data = await res.json();
   return {
@@ -37,21 +37,21 @@ async function fetchActiveSprintViaProxy(boardId) {
 
 async function fetchSprintIssues(sprintId) {
   var res = await fetch('/api/jira?action=issues&sprintId=' + sprintId);
-  if (!res.ok) throw new Error('Gagal fetch issues');
+  if (!res.ok) throw new Error('Failed to fetch issues');
   var data = await res.json();
   return data.issues || [];
 }
 
 async function fetchIssuesByJql(jql) {
   var res = await fetch('/api/jira?action=jql&jql=' + encodeURIComponent(jql));
-  if (!res.ok) throw new Error('Gagal fetch issues via JQL');
+  if (!res.ok) throw new Error('Failed to fetch issues via JQL');
   var data = await res.json();
   return data.issues || [];
 }
 
 async function fetchSprintReport(boardId, sprintId) {
   var res = await fetch('/api/jira?action=sprintReport&boardId=' + boardId + '&sprintId=' + sprintId);
-  if (!res.ok) throw new Error('Gagal fetch sprint report');
+  if (!res.ok) throw new Error('Failed to fetch sprint report');
   return res.json();
 }
 
@@ -66,7 +66,7 @@ async function fetchConfluencePages(spaceKey) {
   var res = await fetch('/api/confluence?action=pages&spaceKey=' + spaceKey);
   if (!res.ok) {
     var err = await res.json().catch(function(){ return {error:'Unknown error'}; });
-    throw new Error(err.error || 'Gagal fetch pages');
+    throw new Error(err.error || 'Failed to fetch pages');
   }
   var data = await res.json();
   return { pages: data.pages || [], total: data.total || 0 };
@@ -158,11 +158,11 @@ function buildHTML(goals, sprintReport) {
         '<td><p>' + totalIssues + '</p></td>' +
       '</tr>' +
       '<tr>' +
-        '<td><p>Selesai</p></td>' +
+        '<td><p>Completed</p></td>' +
         '<td><p>' + sr.completedIssues + '</p></td>' +
       '</tr>' +
       '<tr>' +
-        '<td><p>Belum Selesai</p></td>' +
+        '<td><p>Not Completed</p></td>' +
         '<td><p>' + sr.notCompletedIssues + '</p></td>' +
       '</tr>' +
       '<tr>' +
@@ -289,11 +289,11 @@ function Spinner(props) {
 
 function Steps(props) {
   var list = [
-    'Pilih Team',
+    'Select Team',
     'Sprint Goals',
     'Fetch Tickets',
     'Review',
-    'Selesai',
+    'Done',
   ];
   return (
     <div style={{ display: 'flex', alignItems: 'center', marginBottom: 24 }}>
@@ -467,7 +467,7 @@ function GoalCard(props) {
         onChange={function (e) {
           props.onChange(index, 'comment', e.target.value);
         }}
-        placeholder="Comment untuk sprint review..."
+        placeholder="Comment for sprint review..."
         style={{
           width: '100%',
           minHeight: 56,
@@ -701,13 +701,13 @@ export default function App() {
         setRawGoals(goalText);
         if (!goalText)
           setGoalsErr(
-            'Sprint goals belum diisi di Jira. Silakan isi manual di bawah.'
+            'Sprint goals not set in Jira. Fill manually below.'
           );
         setFetching(false);
       })
       .catch(function (err) {
         setGoalsErr(
-          'Gagal fetch sprint goal: ' + err.message + '. Silakan isi manual.'
+          'Failed to fetch sprint goal: ' + err.message + '. Fill manually.'
         );
         setFetching(false);
       });
@@ -734,7 +734,7 @@ export default function App() {
       return;
     }
     if (!sprintName.trim()) {
-      setError('Nama sprint tidak boleh kosong.');
+      setError('Sprint name cannot be empty.');
       return;
     }
     setError('');
@@ -743,16 +743,16 @@ export default function App() {
 
     var issuesPromise;
     if (sprintId) {
-      setLoadingMsg('Mengambil tickets dari Jira Agile API...');
+      setLoadingMsg('Fetching tickets from Jira Agile API...');
       issuesPromise = fetchSprintIssues(sprintId);
     } else {
-      setLoadingMsg('Mencari tickets via JQL...');
+      setLoadingMsg('Searching tickets via JQL...');
       issuesPromise = fetchIssuesByJql('project = ' + pk + ' AND sprint = "' + sprintName + '"');
     }
 
     issuesPromise
       .then(function (issues) {
-        setLoadingMsg(issues.length + ' tickets. Mapping ke sprint goals...');
+        setLoadingMsg(issues.length + ' tickets. Mapping to sprint goals...');
 
         var ticketLines =
           issues
@@ -830,7 +830,7 @@ export default function App() {
         });
       })
       .catch(function (err) {
-        setError('Gagal: ' + err.message);
+        setError('Failed: ' + err.message);
         setStep(2);
         setLoading(false);
       });
@@ -838,7 +838,7 @@ export default function App() {
 
   function doCreatePage() {
     setLoading(true);
-    setLoadingMsg('Membuat halaman di Confluence...');
+    setLoadingMsg('Creating page in Confluence...');
     var num = (sprintInfo.name.match(/\d+/) || ['N'])[0];
     var title = sprintInfo.team + ' - ' + num + ' Sprint Log';
     var body = buildHTML(goals, sprintReport);
@@ -849,7 +849,7 @@ export default function App() {
       body: JSON.stringify({ title: title, body: body, spaceKey: selectedSpace, parentId: selectedParent }),
     })
       .then(function (res) {
-        if (!res.ok) return res.json().then(function (d) { throw new Error(d.error || 'Gagal'); });
+        if (!res.ok) return res.json().then(function (d) { throw new Error(d.error || 'Failed'); });
         return res.json();
       })
       .then(function (result) {
@@ -864,7 +864,7 @@ export default function App() {
         } catch (e) {}
       })
       .catch(function (err) {
-        setError('Gagal buat halaman: ' + err.message);
+        setError('Failed to create page: ' + err.message);
         setLoading(false);
       });
   }
@@ -908,7 +908,7 @@ export default function App() {
           </div>
           <h1 style={{ color:'#172B4D', fontSize:28, margin:'0 0 8px' }}>Sprint Log Generator</h1>
           <p style={{ color:'#6B778C', fontSize:14, margin:'0 0 24px', lineHeight:1.5 }}>
-            Generate sprint log ke Confluence secara otomatis.
+            Generate sprint log to Confluence automatically.
           </p>
           <a
             href="/api/auth/login"
@@ -917,7 +917,7 @@ export default function App() {
               borderRadius:8, textDecoration:'none', fontWeight:700, fontSize:14,
             }}
           >
-            Login dengan Atlassian
+            Login with Atlassian
           </a>
         </div>
       </div>
@@ -1016,7 +1016,7 @@ export default function App() {
                 color: '#172B4D',
               }}
             >
-              Pilih Team
+              Select Team
             </h2>
             <div
               style={{
@@ -1085,7 +1085,7 @@ export default function App() {
                   Sprint Goals — {team.name} Team
                 </h2>
                 <p style={{ margin: 0, fontSize: 13, color: '#6B778C' }}>
-                  Data otomatis diambil dari sprint aktif di Jira.
+                  Data automatically fetched from active sprint in Jira.
                 </p>
               </div>
               <button
@@ -1132,7 +1132,7 @@ export default function App() {
                     color: '#97A0AF',
                   }}
                 >
-                  Mengambil data sprint...
+                  Fetching sprint data...
                 </div>
               ) : (
                 <input
@@ -1218,7 +1218,7 @@ export default function App() {
                     }}
                   />
                   <p style={{ color: '#6B778C', fontSize: 13, margin: 0 }}>
-                    Mengambil sprint goals dari Jira...
+                    Fetching sprint goals from Jira...
                   </p>
                 </div>
               ) : (
@@ -1228,7 +1228,7 @@ export default function App() {
                     setRawGoals(e.target.value);
                   }}
                   placeholder={
-                    '1. Goal pertama\n2. Goal kedua\n\n(Paste manual dari Jira Edit Sprint jika auto-fetch gagal)'
+                    '1. First goal\n2. Second goal\n\n(Paste from Jira Edit Sprint if auto-fetch fails)'
                   }
                   style={{
                     width: '100%',
@@ -1273,8 +1273,8 @@ export default function App() {
                   marginBottom: 16,
                 }}
               >
-                ✓ Sprint goals berhasil di-fetch dari Jira. Edit jika
-                diperlukan.
+                ✓ Sprint goals fetched from Jira. Edit if
+                needed.
               </div>
             )}
 
@@ -1285,13 +1285,13 @@ export default function App() {
                   setStep(1);
                 }}
               >
-                Ganti Team
+                Change Team
               </Btn>
               <Btn
                 onClick={doFetchAndMap}
                 disabled={fetching || !sprintName.trim() || !rawGoals.trim()}
               >
-                Fetch Tickets dan Auto-Map
+                Fetch Tickets & Auto-Map
               </Btn>
             </div>
           </Card>
@@ -1315,7 +1315,7 @@ export default function App() {
               >
                 <div>
                   <div style={{ fontSize: 12, color: '#6B778C' }}>
-                    Sprint aktif - {team.name} Team
+                    Active Sprint - {team.name} Team
                   </div>
                   <div
                     style={{ fontWeight: 700, color: '#172B4D', fontSize: 16 }}
@@ -1425,7 +1425,7 @@ export default function App() {
                           <div style={{ padding:'10px 12px', fontSize:12, color:'#97A0AF' }}>No pages found</div>
                         ) : (
                           <>
-                          <div style={{ padding:'6px 12px', fontSize:11, color:'#6B778C', borderBottom:'1px solid #F4F5F7' }}>{pages.filter(function(p){ return !pagesSearch || p.title.toLowerCase().indexOf(pagesSearch.toLowerCase()) !== -1; }).length} pages (total: {pagesTotal})</div>
+                          <div style={{ padding:'6px 12px', fontSize:11, color:'#6B778C', borderBottom:'1px solid #F4F5F7' }}>{pages.filter(function(p){ return !pagesSearch || p.title.toLowerCase().indexOf(pagesSearch.toLowerCase()) !== -1; }).length} filtered (total: {pagesTotal})</div>
                           {pages.filter(function(p){ return !pagesSearch || p.title.toLowerCase().indexOf(pagesSearch.toLowerCase()) !== -1; }).map(function(p){
                             var sel = p.id === selectedParent;
                             return (
@@ -1477,7 +1477,7 @@ export default function App() {
                 Edit Goals
               </Btn>
               <Btn onClick={doCreatePage} disabled={loading}>
-                {loading ? 'Membuat...' : 'Buat di Confluence'}
+                {loading ? 'Creating...' : 'Publish to Confluence'}
               </Btn>
             </div>
           </div>
@@ -1497,7 +1497,7 @@ export default function App() {
               Sprint Log berhasil dibuat!
             </h2>
             <p style={{ margin: '0 0 24px', color: '#6B778C', fontSize: 14 }}>
-              Dokumen sudah ada di Confluence. PM/EM tinggal lengkapi Sprint
+              Document already in Confluence. PM/EM can complete the Sprint
               Health, Burn Down Chart, dan comment saat sprint review.
             </p>
             <a
@@ -1516,7 +1516,7 @@ export default function App() {
                 marginBottom: 16,
               }}
             >
-              Buka di Confluence
+              Open in Confluence
             </a>
             <div>
               <button

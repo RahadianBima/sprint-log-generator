@@ -29,7 +29,7 @@ export async function GET(request: Request) {
     // Fetch spaces (v2 API to get IDs)
     if (action === 'spaces') {
       const res = await conFetch(`${baseUrl}/wiki/api/v2/spaces?type=global&limit=250`);
-      if (!res.ok) return NextResponse.json({ error: 'Gagal fetch spaces' }, { status: 500 });
+      if (!res.ok) return NextResponse.json({ error: 'Failed to fetch spaces' }, { status: 500 });
       return NextResponse.json({
         spaces: (res.data.results || []).map((s: any) => ({
           key: s.key,
@@ -45,17 +45,17 @@ export async function GET(request: Request) {
       // Resolve spaceKey → spaceId via v2 API (keys filter is supported)
       const spaceRes = await conFetch(`${baseUrl}/wiki/api/v2/spaces?keys=${encodeURIComponent(spaceKey)}&limit=1`);
       if (!spaceRes.ok) {
-        return NextResponse.json({ error: 'Gagal cari space ID: ' + (spaceRes.data?.message || JSON.stringify(spaceRes.data).slice(0,150)) }, { status: 500 });
+        return NextResponse.json({ error: 'Failed to find space ID: ' + (spaceRes.data?.message || JSON.stringify(spaceRes.data).slice(0,150)) }, { status: 500 });
       }
       const spaceId = spaceRes.data.results?.[0]?.id;
       if (!spaceId) {
-        return NextResponse.json({ error: 'Space tidak ditemukan: ' + spaceKey }, { status: 404 });
+        return NextResponse.json({ error: 'Space not found: ' + spaceKey }, { status: 404 });
       }
       var allPages: any[] = [];
       var nextUrl = `${baseUrl}/wiki/api/v2/spaces/${spaceId}/pages?limit=250`;
       const res = await conFetch(nextUrl);
       if (!res.ok) {
-        return NextResponse.json({ error: 'Gagal: ' + (res.data?.message || JSON.stringify(res.data).slice(0,150)) }, { status: 500 });
+        return NextResponse.json({ error: 'Failed: ' + (res.data?.message || JSON.stringify(res.data).slice(0,150)) }, { status: 500 });
       }
       allPages = allPages.concat(res.data.results || []);
       var next = res.data._links?.next;
@@ -86,7 +86,7 @@ export async function POST(request: Request) {
     const token = process.env.JIRA_API_TOKEN || '';
     if (!email || !token) {
       return NextResponse.json(
-        { error: 'JIRA_USER_EMAIL atau JIRA_API_TOKEN belum diisi di .env.local' },
+        { error: 'JIRA_USER_EMAIL or JIRA_API_TOKEN not set in .env.local' },
         { status: 500 }
       );
     }
@@ -138,7 +138,7 @@ export async function POST(request: Request) {
           });
         }
 
-        return NextResponse.json({ error: `Gagal update page: ${update.status} ${JSON.stringify(update.data).slice(0,200)}` }, { status: 500 });
+        return NextResponse.json({ error: `Failed to update page: ${update.status} ${JSON.stringify(update.data).slice(0,200)}` }, { status: 500 });
       }
     }
 

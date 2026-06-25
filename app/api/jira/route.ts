@@ -10,7 +10,7 @@ export async function GET(request: Request) {
 
     if (!email || !token) {
       return NextResponse.json(
-        { error: 'JIRA_USER_EMAIL atau JIRA_API_TOKEN belum diisi di .env.local' },
+        { error: 'JIRA_USER_EMAIL or JIRA_API_TOKEN not set in .env.local' },
         { status: 500 }
       );
     }
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
 
     if (action === 'issues') {
       const sprintId = searchParams.get('sprintId');
-      if (!sprintId) throw new Error('Parameter sprintId diperlukan');
+      if (!sprintId) throw new Error('sprintId parameter is required');
       const fields = 'summary,status,customfield_10005,issuetype,parent,subtasks';
       const data = await jiraFetch(
         `${baseUrl}/rest/agile/1.0/sprint/${sprintId}/issue?fields=${fields}&maxResults=100`
@@ -55,7 +55,7 @@ export async function GET(request: Request) {
 
     if (action === 'jql') {
       const jql = searchParams.get('jql');
-      if (!jql) throw new Error('Parameter jql diperlukan');
+      if (!jql) throw new Error('jql parameter is required');
       const fields = 'summary,status,customfield_10005,issuetype,parent,subtasks';
       const data = await jiraFetch(
         `${baseUrl}/rest/agile/1.0/issue/search?jql=${encodeURIComponent(jql)}&fields=${fields}&maxResults=100`
@@ -82,7 +82,7 @@ export async function GET(request: Request) {
     if (action === 'sprintReport') {
       const boardId = searchParams.get('boardId');
       const sprintId = searchParams.get('sprintId');
-      if (!boardId || !sprintId) throw new Error('Parameter boardId dan sprintId diperlukan');
+      if (!boardId || !sprintId) throw new Error('boardId and sprintId parameters are required');
 
       const data = await jiraFetch(
         `${baseUrl}/rest/greenhopper/1.0/rapid/charts/sprintreport?rapidViewId=${boardId}&sprintId=${sprintId}`
@@ -119,7 +119,7 @@ export async function GET(request: Request) {
     const activeSprint = sprintData.values?.[0];
     if (!activeSprint) {
       return NextResponse.json(
-        { error: `Tidak ada sprint aktif di board ${boardId}` },
+        { error: `No active sprint found for board ${boardId}` },
         { status: 500 }
       );
     }

@@ -9,7 +9,7 @@ export async function POST(request: Request) {
 
     if (!apiKey) {
       return NextResponse.json(
-        { error: 'GROQ_API_KEY belum diisi di .env.local. Daftar gratis di https://console.groq.com' },
+        { error: 'GROQ_API_KEY not set in .env.local. Sign up free at https://console.groq.com' },
         { status: 500 }
       );
     }
