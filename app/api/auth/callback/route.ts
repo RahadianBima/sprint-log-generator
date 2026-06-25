@@ -3,6 +3,14 @@ import { SignJWT } from 'jose';
 
 const getJwtSecret = () => new TextEncoder().encode(process.env.JWT_SECRET || 'fallback-secret-do-not-use-in-prod');
 
+async function tryFetch(url: string, token: string) {
+  try {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } });
+    if (!res.ok) return null;
+    return res.json();
+  } catch { return null; }
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -11,7 +19,7 @@ export async function GET(request: Request) {
     const error = searchParams.get('error');
 
     if (error) {
-      return new Response(`Atlassian OAuth error: ${error}`, { status: 400 });
+      return new Response('Atlassian OAuth error: ' + error, { status: 400 });
     }
 
     if (!code) {
@@ -51,35 +59,80 @@ export async function GET(request: Request) {
 
     if (!tokenRes.ok) {
       const text = await tokenRes.text();
-      return new Response(`Token exchange failed: ${text}`, { status: 500 });
+      return new Response('Token exchange failed: ' + text, { status: 500 });
     }
 
     const tokenData = await tokenRes.json();
     const accessToken = tokenData.access_token;
 
-    // Fetch user info
-    const userRes = await fetch('https://api.atlassian.com/me', {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    // Try multiple ways to get user email
+    let email = '';
+    let name = '';
+    let picture = '';
 
-    if (!userRes.ok) {
-      return new Response('Failed to fetch user info', { status: 500 });
+    // Method 1: api.atlassian.com/me
+    const meData = await tryFetch('https://api.atlassian.com/me', accessToken);
+    if (meData) {
+      email = meData.email || '';
+      name = meData.name || meData.nickname || '';
+      picture = meData.picture || '';
     }
 
-    const userData = await userRes.json();
-    const email = userData.email || '';
-    const name = userData.name || userData.nickname || email.split('@')[0];
-    const picture = userData.picture || '';
+    // Method 2: auth.atlassian.com/userinfo
+    if (!email) {
+      const userInfo = await tryFetch('https://auth.atlassian.com/userinfo', accessToken);
+      if (userInfo) {
+        email = userInfo.email || userInfo.sub || '';
+        name = name || userInfo.name || userInfo.nickname || '';
+      }
+    }
 
-    // Verify @mekari email
+    // Method 3: Jira REST API user/current
+    if (!email) {
+      const resources = await tryFetch('https://api.atlassian.com/oauth/token/accessible-resources', accessToken);
+      if (resources && resources[0]?.id) {
+        const jiraUser = await tryFetch(
+          `https://api.atlassian.com/ex/jira/${resources[0].id}/rest/api/3/user/current`,
+          accessToken
+        );
+        if (jiraUser) {
+          email = jiraUser.emailAddress || '';
+          name = name || jiraUser.displayName || '';
+          picture = picture || jiraUser.avatarUrls?.['48x48'] || '';
+        }
+      }
+    }
+
+    // Method 4: Decode access token JWT
+    if (!email) {
+      try {
+        const payload = JSON.parse(atob(accessToken.split('.')[1]));
+        email = payload.email || payload.sub || '';
+        name = name || payload.name || '';
+      } catch {}
+    }
+
+    if (!email) {
+      return new Response(
+        '<html><body style="font-family:sans-serif;padding:40px;text-align:center">' +
+        '<h2>Gagal Mendapatkan Email</h2>' +
+        '<p>Tidak bisa membaca profil pengguna dari Atlassian. Coba lagi atau hubungi admin.</p>' +
+        '<a href="/" style="color:#0052CC">Kembali</a></body></html>',
+        { status: 500, headers: { 'Content-Type': 'text/html' } }
+      );
+    }
+
+    // Extract name from email if not found
+    if (!name) name = email.split('@')[0];
+
+    // Verify @mekari
     if (!email.endsWith('@mekari.com')) {
       return new Response(
-        `<html><body style="font-family:sans-serif;padding:40px;text-align:center">
-          <h2>Akses Ditolak</h2>
-          <p>Hanya pengguna dengan email <strong>@mekari.com</strong> yang dapat mengakses aplikasi ini.</p>
-          <p>Email Anda: ${email}</p>
-          <a href="/" style="color:#0052CC">Kembali</a>
-        </body></html>`,
+        '<html><body style="font-family:sans-serif;padding:40px;text-align:center">' +
+        '<h2>Akses Ditolak</h2>' +
+        '<p>Hanya pengguna dengan email <strong>@mekari.com</strong> yang dapat mengakses aplikasi ini.</p>' +
+        '<p>Email Anda: ' + email + '</p>' +
+        '<a href="/" style="color:#0052CC">Kembali</a></body></html>',
         { status: 403, headers: { 'Content-Type': 'text/html' } }
       );
     }
@@ -101,11 +154,10 @@ export async function GET(request: Request) {
       maxAge: 60 * 60 * 24, // 24 hours
     });
 
-    // Clear oauth_state cookie
     response.cookies.set('oauth_state', '', { maxAge: 0, path: '/' });
 
     return response;
   } catch (err: any) {
-    return new Response(`Callback error: ${err.message}`, { status: 500 });
+    return new Response('Callback error: ' + err.message, { status: 500 });
   }
 }

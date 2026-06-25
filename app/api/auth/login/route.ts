@@ -13,7 +13,7 @@ export async function GET() {
   const params = new URLSearchParams({
     audience: 'api.atlassian.com',
     client_id: clientId,
-    scope: 'read:jira-user',
+    scope: 'read:jira-user email openid',
     redirect_uri: redirectUri,
     state,
     response_type: 'code',
