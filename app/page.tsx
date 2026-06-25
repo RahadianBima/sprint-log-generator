@@ -816,7 +816,7 @@ export default function App() {
           >
             📋
           </div>
-          <div>
+          <div style={{ flex: 1 }}>
             <h1
               style={{
                 margin: 0,
@@ -830,18 +830,18 @@ export default function App() {
             <p style={{ margin: 0, fontSize: 12, color: '#6B778C' }}>
               Auto-generate Sprint Log Confluence · A&T Tribe
             </p>
-            <a
-              href="/api/auth/logout"
-              style={{
-                fontSize: 12,
-                color: '#97A0AF',
-                textDecoration: 'none',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              Logout
-            </a>
           </div>
+          <a
+            href="/api/auth/logout"
+            style={{
+              fontSize: 12,
+              color: '#97A0AF',
+              textDecoration: 'none',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Logout
+          </a>
         </div>
 
         <Steps cur={step} />

@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 
-export async function GET() {
-  const response = NextResponse.redirect(new URL('/', process.env.BASE_URL || 'http://localhost:3000'));
+export async function GET(request: Request) {
+  const origin = new URL(request.url).origin;
+  const response = NextResponse.redirect(origin);
   response.cookies.set('session', '', { maxAge: 0, path: '/' });
   return response;
 }
