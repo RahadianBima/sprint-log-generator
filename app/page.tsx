@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 const PARENT_ID = '51160186939';
 const JIRA_BASE = 'https://jurnal.atlassian.net';
@@ -68,6 +68,13 @@ async function fetchConfluencePages(spaceKey) {
     var err = await res.json().catch(function(){ return {error:'Unknown error'}; });
     throw new Error(err.error || 'Gagal fetch pages');
   }
+  var data = await res.json();
+  return data.pages || [];
+}
+
+async function searchConfluencePages(spaceKey, query) {
+  var res = await fetch('/api/confluence?action=searchPages&spaceKey=' + spaceKey + '&query=' + encodeURIComponent(query));
+  if (!res.ok) return [];
   var data = await res.json();
   return data.pages || [];
 }
@@ -627,6 +634,29 @@ export default function App() {
     if (step !== 4) return;
     doFetchPages(selectedSpace);
   }, [step]);
+
+  var searchTimer = useRef(null);
+
+  function handlePagesSearchInput(value) {
+    setPagesSearch(value);
+    setPagesOpen(true);
+    if (!value.trim()) {
+      doFetchPages(selectedSpace);
+      return;
+    }
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(function () {
+      setPagesLoading(true);
+      setPagesError('');
+      searchConfluencePages(selectedSpace, value).then(function (p) {
+        setPages(p);
+      }).catch(function (err) {
+        setPagesError(err.message);
+      }).finally(function () {
+        setPagesLoading(false);
+      });
+    }, 300);
+  }
 
   // Auto-fetch goals when entering step 2
   useEffect(
@@ -1339,7 +1369,7 @@ export default function App() {
                     <div>
                       <input
                         value={pagesOpen ? pagesSearch : (pages.find(function(p){ return p.id === selectedParent; }) || {}).title || ''}
-                        onChange={function(e){ setPagesSearch(e.target.value); setPagesOpen(true); }}
+                        onChange={function(e){ handlePagesSearchInput(e.target.value); }}
                         onFocus={function(){ setPagesOpen(true); }}
                         onBlur={function(){ setTimeout(function(){ setPagesOpen(false); }, 150); }}
                         placeholder="Search page..."
@@ -1354,10 +1384,10 @@ export default function App() {
                           background:'#fff', border:'1px solid #DFE1E6', borderRadius:6, marginTop:2,
                           zIndex:10, boxShadow:'0 4px 12px rgba(0,0,0,0.1)',
                         }}>
-                          {pages.filter(function(p){ return p.title.toLowerCase().indexOf(pagesSearch.toLowerCase()) !== -1; }).length === 0 ? (
+                          {pages.length === 0 ? (
                             <div style={{ padding:'10px 12px', fontSize:12, color:'#97A0AF' }}>No pages found</div>
                           ) : (
-                            pages.filter(function(p){ return p.title.toLowerCase().indexOf(pagesSearch.toLowerCase()) !== -1; }).map(function(p){
+                            pages.map(function(p){
                               var sel = p.id === selectedParent;
                               return (
                                 <div key={p.id}

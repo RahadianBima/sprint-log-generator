@@ -53,6 +53,23 @@ export async function GET(request: Request) {
       });
     }
 
+    // Search pages via CQL (dynamic, finds any page by title)
+    if (action === 'searchPages') {
+      const spaceKey = searchParams.get('spaceKey') || 'PD';
+      const query = searchParams.get('query') || '';
+      const cql = `space=${encodeURIComponent(spaceKey)} AND type=page${query ? ` AND title~"${encodeURIComponent(query)}"` : ''}`;
+      const res = await conFetch(
+        `${baseUrl}/wiki/rest/api/search?cql=${cql}&limit=50`
+      );
+      if (!res.ok) return NextResponse.json({ error: 'Gagal search pages: ' + (res.data?.message || JSON.stringify(res.data)) }, { status: 500 });
+      return NextResponse.json({
+        pages: (res.data.results || []).map((p: any) => ({
+          id: p.content.id,
+          title: p.title,
+        })),
+      });
+    }
+
     return NextResponse.json({ error: 'action tidak dikenal' }, { status: 400 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
