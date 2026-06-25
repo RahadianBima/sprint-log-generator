@@ -20,39 +20,83 @@ const STATUS_COLOR = {
   invalid: { badge: '#97A0AF' },
 };
 
-// ── Jira API via Next.js backend (no CORS issues) ──────────────────
-async function fetchActiveSprintViaProxy(boardId) {
-  var res = await fetch('/api/jira?boardId=' + boardId);
-  if (!res.ok) {
-    var errData = await res.json();
-    throw new Error(errData.error || 'Failed to fetch data from Jira Server');
+const PRESET_LABELS = {
+  thisWeek: 'This Week',
+  lastWeek: 'Last Week',
+  thisMonth: 'This Month',
+  lastMonth: 'Last Month',
+};
+
+// ── Date helpers ────────────────────────────────────────────────────
+function fmtDate(d) {
+  var y = d.getFullYear();
+  var m = String(d.getMonth() + 1).padStart(2, '0');
+  var day = String(d.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + day;
+}
+
+function getWeekNumber(d) {
+  var copy = new Date(d);
+  copy.setHours(0, 0, 0, 0);
+  copy.setDate(copy.getDate() + 3 - ((copy.getDay() + 6) % 7));
+  var week1 = new Date(copy.getFullYear(), 0, 4);
+  return 1 + Math.round(((copy - week1) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
+}
+
+function getPeriodDates(preset) {
+  var now = new Date();
+  var day = now.getDay();
+  var start, end, label;
+
+  switch (preset) {
+    case 'thisWeek': {
+      var mon = new Date(now);
+      mon.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
+      var sun = new Date(mon);
+      sun.setDate(mon.getDate() + 6);
+      start = fmtDate(mon);
+      end = fmtDate(sun);
+      label = 'Week ' + getWeekNumber(mon) + ' ' + now.getFullYear();
+      break;
+    }
+    case 'lastWeek': {
+      var lmon = new Date(now);
+      lmon.setDate(now.getDate() - (day === 0 ? 13 : day + 6));
+      var lsun = new Date(lmon);
+      lsun.setDate(lmon.getDate() + 6);
+      start = fmtDate(lmon);
+      end = fmtDate(lsun);
+      label = 'Week ' + getWeekNumber(lmon) + ' ' + lmon.getFullYear();
+      break;
+    }
+    case 'thisMonth': {
+      start = fmtDate(new Date(now.getFullYear(), now.getMonth(), 1));
+      end = fmtDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+      label = now.toLocaleString('en', { month: 'long' }) + ' ' + now.getFullYear();
+      break;
+    }
+    case 'lastMonth': {
+      start = fmtDate(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+      end = fmtDate(new Date(now.getFullYear(), now.getMonth(), 0));
+      label = new Date(now.getFullYear(), now.getMonth() - 1, 1).toLocaleString('en', { month: 'long' }) + ' ' + now.getFullYear();
+      break;
+    }
+    default: {
+      start = fmtDate(now);
+      end = fmtDate(now);
+      label = 'Custom Period';
+    }
   }
-  var data = await res.json();
-  return {
-    sprintId: data.sprintId,
-    sprintName: data.sprintName,
-    goal: data.sprintGoalFromJira || '',
-  };
+
+  return { start: start, end: end, label: label };
 }
 
-async function fetchSprintIssues(sprintId) {
-  var res = await fetch('/api/jira?action=issues&sprintId=' + sprintId);
-  if (!res.ok) throw new Error('Failed to fetch issues');
-  var data = await res.json();
-  return data.issues || [];
-}
-
+// ── Jira API via Next.js backend (no CORS issues) ──────────────────
 async function fetchIssuesByJql(jql) {
   var res = await fetch('/api/jira?action=jql&jql=' + encodeURIComponent(jql));
   if (!res.ok) throw new Error('Failed to fetch issues via JQL');
   var data = await res.json();
   return data.issues || [];
-}
-
-async function fetchSprintReport(boardId, sprintId) {
-  var res = await fetch('/api/jira?action=sprintReport&boardId=' + boardId + '&sprintId=' + sprintId);
-  if (!res.ok) throw new Error('Failed to fetch sprint report');
-  return res.json();
 }
 
 async function fetchConfluenceSpaces() {
@@ -73,20 +117,6 @@ async function fetchConfluencePages(spaceKey) {
 }
 
 // ── Anthropic API ──────────────────────────────────────────────────────────────
-async function anthropic(system, user, maxTokens) {
-  var res = await fetch('/api/anthropic', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      system: system,
-      user: user,
-      maxTokens: maxTokens || 2000,
-    }),
-  });
-  if (!res.ok) throw new Error('Anthropic Error ' + res.status);
-  return res.json();
-}
-
 async function anthropicJSON(systemPrompt, userPrompt) {
   var res = await fetch('/api/anthropic', {
     method: 'POST',
@@ -103,7 +133,6 @@ async function anthropicJSON(systemPrompt, userPrompt) {
 
   try {
     var rawText = data.content[0].text;
-    // Bersihin markdown code fence kalo ada
     rawText = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
     return JSON.parse(rawText);
   } catch (e) {
@@ -111,24 +140,26 @@ async function anthropicJSON(systemPrompt, userPrompt) {
   }
 }
 
-// ── Build Confluence HTML ──────────────────────────────────────────────────────
+// ── Build Confluence HTML (Kanban Period Log) ──────────────────────
 function escapeHTML(str) {
   return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
-function buildHTML(goals, sprintReport) {
+
+function buildHTML(objectives, metrics) {
   function col(s) {
     if (s === 'achieved') return 'green';
     if (s === 'partially achieved') return 'yellow';
     if (s === 'invalid') return 'neutral';
     return 'red';
   }
-  var rows = goals
+
+  var rows = objectives
     .map(function (g, i) {
       return (
         '<tr><td><p>' +
         (i + 1) +
         '</p></td><td><p>' +
-        g.text +
+        escapeHTML(g.text) +
         '</p></td>' +
         '<td><p><span data-type="status" data-color="' +
         col(g.status) +
@@ -136,111 +167,43 @@ function buildHTML(goals, sprintReport) {
         g.status +
         '</span></p></td>' +
         '<td><p>' +
-        (g.comment || '') +
+        escapeHTML(g.comment || '') +
         '</p></td></tr>'
       );
     })
     .join('');
 
-  // Sprint Health
-  var sr = sprintReport || {};
-  var healthRows = '';
-  if (sr.completedIssues !== undefined) {
-    var completionPct = sr.totalSP > 0
-      ? Math.round((sr.completedSP / sr.totalSP) * 100)
-      : 0;
-    var scopeChanges = (sr.addedKeys || []).length;
-    var totalIssues = sr.completedIssues + sr.notCompletedIssues + sr.puntedIssues;
+  // Period Metrics
+  var metricsHtml = '';
+  if (metrics) {
+    var statusRows = Object.entries(metrics.statusCounts || {}).map(function (e) {
+      return '<tr><td><p>' + escapeHTML(e[0]) + '</p></td><td><p>' + e[1] + '</p></td></tr>';
+    }).join('');
 
-    healthRows =
-      '<tr>' +
-        '<td><p>Total Tickets</p></td>' +
-        '<td><p>' + totalIssues + '</p></td>' +
-      '</tr>' +
-      '<tr>' +
-        '<td><p>Completed</p></td>' +
-        '<td><p>' + sr.completedIssues + '</p></td>' +
-      '</tr>' +
-      '<tr>' +
-        '<td><p>Not Completed</p></td>' +
-        '<td><p>' + sr.notCompletedIssues + '</p></td>' +
-      '</tr>' +
-      '<tr>' +
-        '<td><p>Punted / Dropped</p></td>' +
-        '<td><p>' + sr.puntedIssues + '</p></td>' +
-      '</tr>' +
-      '<tr>' +
-        '<td><p>Scope Changes (Added)</p></td>' +
-        '<td><p>' + scopeChanges + '</p></td>' +
-      '</tr>';
-  }
-
-  // Burndown bar
-  var burndownBar = '';
-  if (sr.totalSP > 0) {
-    var pct = Math.round((sr.completedSP / sr.totalSP) * 100);
-    var remainingSP = sr.totalSP - sr.completedSP;
-    burndownBar =
-      '<p><strong>Story Point Progress: ' + pct + '%</strong></p>' +
-      '<table style="width:100%;border-collapse:collapse;border:none">' +
-      '<tr>' +
-      '<td style="background:#DFE1E6;border-radius:8px;padding:0;border:none;width:100%">' +
-      '<div style="background:#36B37E;width:' + pct + '%;height:24px;border-radius:8px;min-width:4px"/>' +
-      '</td>' +
-      '</tr>' +
-      '</table>' +
-      '<table>' +
-      '<tr><td><p><strong>Total SP</strong></p></td><td><p>' + sr.totalSP + '</p></td></tr>' +
-      '<tr><td><p><strong>Completed SP</strong></p></td><td><p>' + sr.completedSP + '</p></td></tr>' +
-      '<tr><td><p><strong>Remaining SP</strong></p></td><td><p>' + remainingSP + '</p></td></tr>' +
-      '</table>';
-  }
-
-  if (sr.sprint) {
-    healthRows +=
-      '<tr>' +
-        '<td><p>Sprint Dates</p></td>' +
-        '<td><p>' + (sr.sprint.startDate || '').slice(0,10) + ' → ' + (sr.sprint.endDate || '').slice(0,10) + '</p></td>' +
-      '</tr>' +
-      '<tr>' +
-        '<td><p>Days Elapsed</p></td>' +
-        '<td><p>' + sr.sprint.daysCompleted + '/' + sr.sprint.totalDays + '</p></td>' +
-      '</tr>';
+    metricsHtml =
+      '<table><tbody>' +
+      '<tr><td><p><strong>Period</strong></p></td><td><p>' + escapeHTML(metrics.periodLabel) + '</p></td></tr>' +
+      '<tr><td><p><strong>Date Range</strong></p></td><td><p>' + metrics.periodStart + ' → ' + metrics.periodEnd + '</p></td></tr>' +
+      '<tr><td><p><strong>Days</strong></p></td><td><p>' + metrics.daysInPeriod + '</p></td></tr>' +
+      '<tr><td><p><strong>Total Resolved</strong></p></td><td><p>' + metrics.totalResolved + '</p></td></tr>' +
+      '<tr><td><p><strong>Throughput</strong></p></td><td><p>' + metrics.throughputPerDay + ' / day</p></td></tr>' +
+      statusRows +
+      '</tbody></table>';
   }
 
   return (
-    '<p><em>Title format: [Team_Name] Sprint #N Report</em></p>' +
-    '<h1>Productivity and Scope Change</h1>' +
-    '<h2>Sprint Health</h2>' +
-    (healthRows
-      ? '<table><tbody>' + healthRows + '</tbody></table>'
-      : '<p><em>Capture the Sprint Health gadget on respective team dashboard in Jira right before closing the sprint.</em></p>'
-    ) +
-    '<h2>Burn Down Chart</h2>' +
-    (burndownBar || '<p><em>Capture the Burn Down Chart gadget on respective team dashboard in Jira right before closing the sprint.</em></p>') +
-    '<h2>Reason</h2>' +
-    '<ol>' +
-    '<li><span data-type="status" data-color="blue">Priority change</span> - Business change priority, alignment delay</li>' +
-    '<li><span data-type="status" data-color="yellow">scope change</span> - Scope changes (Requirement added, requirement change, etc)</li>' +
-    '<li><span data-type="status" data-color="neutral">internal team</span> - Missed estimation, Unidentified complexity, Fast Tracks, Reprioritization</li>' +
-    '<li><span data-type="status" data-color="red">external factor</span> - Any decision made by partner or third party outside Mekari control</li>' +
-    '</ol>' +
+    '<p><em>Title format: [Team_Name] Period Log</em></p>' +
+    '<h1>Period Metrics</h1>' +
+    (metricsHtml || '<p><em>No metrics available.</em></p>') +
+    '<h1>Objectives</h1>' +
     '<table><thead><tr>' +
-    '<th><p><strong>No</strong></p></th><th><p><strong>Reason and Brief Explanation</strong></p></th>' +
-    '<th><p><strong>Potential Impact</strong></p></th><th><p><strong>Category</strong></p></th>' +
-    '</tr></thead><tbody>' +
-    '<tr><td><p>1</p></td><td><p></p></td><td><p></p></td><td><p></p></td></tr>' +
-    '</tbody></table>' +
-    '<hr />' +
-    '<h1>Sprint Goal</h1>' +
-    '<table><thead><tr>' +
-    '<th><p><strong>No</strong></p></th><th><p><strong>Sprint Goal and Target</strong></p></th>' +
+    '<th><p><strong>No</strong></p></th><th><p><strong>Objective</strong></p></th>' +
     '<th><p><strong>Status</strong></p></th><th><p><strong>Comment</strong></p></th>' +
     '</tr></thead><tbody>' +
     rows +
     '</tbody></table>' +
-    '<h2>Tickets</h2>' +
-    goals.map(function(g){
+    '<h2>Completed Tickets</h2>' +
+    objectives.map(function(g){
       return '<h3>' + escapeHTML(g.text) + '</h3><ul>' +
         (g.tickets || []).map(function(t){
           var st = '<li><strong>' + t.key + '</strong> ' + (t.issuetype || '') + ' — ' + (escapeHTML(t.summary || '').slice(0,80)) + ' [' + t.status + ']</li>';
@@ -290,7 +253,7 @@ function Spinner(props) {
 function Steps(props) {
   var list = [
     'Select Team',
-    'Sprint Goals',
+    'Period & Objectives',
     'Fetch Tickets',
     'Review',
     'Done',
@@ -335,7 +298,7 @@ function Steps(props) {
                     : '2px solid transparent',
                 }}
               >
-                {done ? '✓' : n}
+                {done ? '\u2713' : n}
               </div>
               <span
                 style={{
@@ -467,7 +430,7 @@ function GoalCard(props) {
         onChange={function (e) {
           props.onChange(index, 'comment', e.target.value);
         }}
-        placeholder="Comment for sprint review..."
+        placeholder="Comment for period review..."
         style={{
           width: '100%',
           minHeight: 56,
@@ -561,42 +524,44 @@ export default function App() {
   var pkState = useState('ATPRO');
   var pk = pkState[0];
   var setPk = pkState[1];
-  var sprintNameState = useState('');
-  var sprintName = sprintNameState[0];
-  var setSprintName = sprintNameState[1];
-  var rawGoalsState = useState('');
-  var rawGoals = rawGoalsState[0];
-  var setRawGoals = rawGoalsState[1];
-  var sprintIdState = useState(null);
-  var sprintId = sprintIdState[0];
-  var setSprintId = sprintIdState[1];
+
+  // Period state
+  var periodStartState = useState('');
+  var periodStart = periodStartState[0];
+  var setPeriodStart = periodStartState[1];
+  var periodEndState = useState('');
+  var periodEnd = periodEndState[0];
+  var setPeriodEnd = periodEndState[1];
+  var periodLabelState = useState('');
+  var periodLabel = periodLabelState[0];
+  var setPeriodLabel = periodLabelState[1];
+  var objectivesTextState = useState('');
+  var objectivesText = objectivesTextState[0];
+  var setObjectivesText = objectivesTextState[1];
+
+  // Shared state
   var goalsState = useState([]);
   var goals = goalsState[0];
   var setGoals = goalsState[1];
-  var sprintInfoState = useState(null);
-  var sprintInfo = sprintInfoState[0];
-  var setSprintInfo = sprintInfoState[1];
   var loadingState = useState(false);
   var loading = loadingState[0];
   var setLoading = loadingState[1];
   var loadingMsgState = useState('');
   var loadingMsg = loadingMsgState[0];
   var setLoadingMsg = loadingMsgState[1];
-  var fetchingState = useState(false);
-  var fetching = fetchingState[0];
-  var setFetching = fetchingState[1];
-  var goalsErrState = useState('');
-  var goalsErr = goalsErrState[0];
-  var setGoalsErr = goalsErrState[1];
   var errorState = useState('');
   var error = errorState[0];
   var setError = errorState[1];
   var createdUrlState = useState('');
   var createdUrl = createdUrlState[0];
   var setCreatedUrl = createdUrlState[1];
-  var sprintReportState = useState(null);
-  var sprintReport = sprintReportState[0];
-  var setSprintReport = sprintReportState[1];
+
+  // Period metrics
+  var metricsState = useState(null);
+  var metrics = metricsState[0];
+  var setMetrics = metricsState[1];
+
+  // Confluence state
   var spacesState = useState([]);
   var spaces = spacesState[0];
   var setSpaces = spacesState[1];
@@ -630,6 +595,9 @@ export default function App() {
   var selectedParentState = useState('51160186939');
   var selectedParent = selectedParentState[0];
   var setSelectedParent = selectedParentState[1];
+  var activePresetState = useState('thisWeek');
+  var activePreset = activePresetState[0];
+  var setActivePreset = activePresetState[1];
 
   var team = TEAM_CONFIG[pk];
 
@@ -642,7 +610,6 @@ export default function App() {
 
   var fetchRef = useRef(0);
 
-  // Fetch pages when space changes (for parent page selector)
   function doFetchPages(spaceKey) {
     if (!spaceKey) return;
     fetchRef.current++;
@@ -670,7 +637,6 @@ export default function App() {
     doFetchPages(selectedSpace);
   }, [selectedSpace]);
 
-  // Also refetch when entering step 4
   useEffect(function () {
     if (step !== 4) return;
     doFetchPages(selectedSpace);
@@ -681,41 +647,12 @@ export default function App() {
     setPagesOpen(true);
   }
 
-  // Auto-fetch goals when entering step 2
-  useEffect(
-    function () {
-      if (step !== 2) return;
-      setRawGoals('');
-      setSprintName('');
-      setSprintId(null);
-      setGoalsErr('');
-      doFetchGoals(pk);
-    },
-    [step, pk]
-  );
-
-  function doFetchGoals(projectKey) {
-    var cfg = TEAM_CONFIG[projectKey];
-    setFetching(true);
-    setGoalsErr('');
-    fetchActiveSprintViaProxy(cfg.boardId)
-      .then(function (sprint) {
-        setSprintName(sprint.sprintName || '');
-        setSprintId(sprint.sprintId || null);
-        var goalText = (sprint.goal || '').trim();
-        setRawGoals(goalText);
-        if (!goalText)
-          setGoalsErr(
-            'Sprint goals not set in Jira. Fill manually below.'
-          );
-        setFetching(false);
-      })
-      .catch(function (err) {
-        setGoalsErr(
-          'Failed to fetch sprint goal: ' + err.message + '. Fill manually.'
-        );
-        setFetching(false);
-      });
+  function fillPeriodPreset(preset) {
+    var d = getPeriodDates(preset);
+    setPeriodStart(d.start);
+    setPeriodEnd(d.end);
+    setPeriodLabel(d.label);
+    setActivePreset(preset);
   }
 
   function parseLines(raw) {
@@ -724,7 +661,7 @@ export default function App() {
       .map(function (l) {
         return l
           .replace(/^\s*\d+[.)]\s*/, '')
-          .replace(/→/g, '-')
+          .replace(/\u2192/g, '-')
           .trim();
       })
       .filter(function (l) {
@@ -732,32 +669,30 @@ export default function App() {
       });
   }
 
-  function doFetchAndMap() {
-    var lines = parseLines(rawGoals);
+  function doFetchAndCategorize() {
+    var lines = parseLines(objectivesText);
     if (!lines.length) {
-      setError('Minimal isi 1 sprint goal.');
+      setError('Minimal isi 1 objective.');
       return;
     }
-    if (!sprintName.trim()) {
-      setError('Sprint name cannot be empty.');
+    if (!periodStart || !periodEnd) {
+      setError('Isi tanggal awal dan akhir period.');
+      return;
+    }
+    if (!periodLabel.trim()) {
+      setError('Period label cannot be empty.');
       return;
     }
     setError('');
     setLoading(true);
     setStep(3);
+    setLoadingMsg('Fetching completed tickets from Jira...');
 
-    var issuesPromise;
-    if (sprintId) {
-      setLoadingMsg('Fetching tickets from Jira Agile API...');
-      issuesPromise = fetchSprintIssues(sprintId);
-    } else {
-      setLoadingMsg('Searching tickets via JQL...');
-      issuesPromise = fetchIssuesByJql('project = ' + pk + ' AND sprint = "' + sprintName + '"');
-    }
+    var jql = 'project = ' + pk + ' AND resolved >= "' + periodStart + '" AND resolved <= "' + periodEnd + '"';
 
-    issuesPromise
+    fetchIssuesByJql(jql)
       .then(function (issues) {
-        setLoadingMsg(issues.length + ' tickets. Mapping to sprint goals...');
+        setLoadingMsg(issues.length + ' tickets found. Mapping to objectives via AI...');
 
         var ticketLines =
           issues
@@ -776,35 +711,45 @@ export default function App() {
 
         var goalStr = lines
           .map(function (g, i) {
-            return i + 1 + '. ' + g;
+            return (i + 1) + '. ' + g;
           })
           .join('\n');
 
-        // Also fetch sprint report data for health/burndown
-        var reportPromise = sprintId
-          ? fetchSprintReport(TEAM_CONFIG[pk].boardId, sprintId).catch(function () { return null; })
-          : Promise.resolve(null);
+        // Compute period metrics
+        var daysInPeriod = Math.ceil((new Date(periodEnd + 'T23:59:59') - new Date(periodStart + 'T00:00:00')) / (1000 * 60 * 60 * 24));
+        var statusCounts = {};
+        issues.forEach(function (t) {
+          statusCounts[t.status] = (statusCounts[t.status] || 0) + 1;
+        });
+        var throughput = daysInPeriod > 0 ? (issues.length / daysInPeriod) : 0;
 
-        return Promise.all([
-          anthropicJSON(
-            'Sprint analyst. Return ONLY minified JSON no whitespace no markdown.',
-            'Goals:\n' +
-              goalStr +
-              '\nTickets (each has key, type=Story/Task/Subtask, parentKey):\n' +
-              ticketLines +
-              '\nFor each goal: find relevant ticketKeys (stories and their subtasks), derive status(achieved/partially achieved/not achieved/invalid), 1-sentence English comment.' +
-              '\nReturn: {"goals":[{"text":"...","status":"...","ticketKeys":["' +
-              pk +
-              '-1"],"comment":"..."}]}'
-          ),
-          reportPromise,
-        ]).then(function (results) {
-          var mp = results[0];
-          var report = results[1];
+        var periodMetrics = {
+          periodStart: periodStart,
+          periodEnd: periodEnd,
+          periodLabel: periodLabel.trim(),
+          daysInPeriod: daysInPeriod,
+          totalResolved: issues.length,
+          throughputPerDay: Math.round(throughput * 10) / 10,
+          statusCounts: statusCounts,
+        };
+
+        return anthropicJSON(
+          'Period analyst. Return ONLY minified JSON no whitespace no markdown.',
+          'Objectives:\n' +
+            goalStr +
+            '\nCompleted Tickets (each has key, type):\n' +
+            ticketLines +
+            '\nFor each objective: find relevant ticketKeys, derive status(achieved/partially achieved/not achieved/invalid), 1-sentence English comment.' +
+            '\nAn objective is achieved if all its tickets are completed, partially if some are done.' +
+            '\nReturn: {"goals":[{"text":"...","status":"...","ticketKeys":["' +
+            pk +
+            '-1"],"comment":"..."}]}'
+        ).then(function (mp) {
           var imap = {};
           issues.forEach(function (t) {
             imap[t.key] = t;
           });
+
           var enriched = (
             mp.goals ||
             lines.map(function (g) {
@@ -827,9 +772,9 @@ export default function App() {
                 .filter(Boolean),
             };
           });
+
           setGoals(enriched);
-          setSprintInfo({ name: sprintName.trim(), team: team.name });
-          setSprintReport(report);
+          setMetrics(periodMetrics);
           setStep(4);
           setLoading(false);
         });
@@ -844,9 +789,8 @@ export default function App() {
   function doCreatePage() {
     setLoading(true);
     setLoadingMsg('Creating page in Confluence...');
-    var num = (sprintInfo.name.match(/\d+/) || ['N'])[0];
-    var title = sprintInfo.team + ' - ' + num + ' Sprint Log';
-    var body = buildHTML(goals, sprintReport);
+    var title = team.name + ' - ' + periodLabel + ' Period Log';
+    var body = buildHTML(goals, metrics);
 
     fetch('/api/confluence', {
       method: 'POST',
@@ -861,12 +805,6 @@ export default function App() {
         setCreatedUrl(result.pageUrl);
         setStep(5);
         setLoading(false);
-        // Cache the result
-        try {
-          var cache = JSON.parse(localStorage.getItem('sprint_cache') || '{}');
-          cache[sprintId] = { url: result.pageUrl, title: title, sprintName: sprintInfo.name, team: sprintInfo.team, createdAt: new Date().toISOString() };
-          localStorage.setItem('sprint_cache', JSON.stringify(cache));
-        } catch (e) {}
       })
       .catch(function (err) {
         setError('Failed to create page: ' + err.message);
@@ -885,15 +823,26 @@ export default function App() {
   function reset() {
     setStep(1);
     setGoals([]);
-    setSprintInfo(null);
+    setPeriodStart('');
+    setPeriodEnd('');
+    setPeriodLabel('');
+    setObjectivesText('');
+    setMetrics(null);
     setCreatedUrl('');
     setError('');
-    setSprintName('');
-    setRawGoals('');
-    setSprintId(null);
-    setSprintReport(null);
     setSelectedSpace('PD');
     setSelectedParent('51160186939');
+    setActivePreset('thisWeek');
+  }
+
+  function goToStep2() {
+    setError('');
+    var d = getPeriodDates('thisWeek');
+    setPeriodStart(d.start);
+    setPeriodEnd(d.end);
+    setPeriodLabel(d.label);
+    setActivePreset('thisWeek');
+    setStep(2);
   }
 
   if (authLoading) {
@@ -910,11 +859,11 @@ export default function App() {
         <div style={{ textAlign:'center', maxWidth:400 }}>
           <div style={{ display:'flex', justifyContent:'flex-end', gap:12, marginBottom:16 }}>
             {user === null ? '' : <a href="/api/auth/logout" style={{ fontSize:12, color:'#97A0AF', textDecoration:'none' }}>Logout</a>}
-            <a href="/kanban" style={{ fontSize:12, color:'#0052CC', textDecoration:'none', fontWeight:600 }}>Kanban Mode &rarr;</a>
+            <a href="/" style={{ fontSize:12, color:'#0052CC', textDecoration:'none', fontWeight:600 }}>Sprint Mode &rarr;</a>
           </div>
-          <h1 style={{ color:'#172B4D', fontSize:28, margin:'0 0 8px' }}>Sprint Log Generator</h1>
+          <h1 style={{ color:'#172B4D', fontSize:28, margin:'0 0 8px' }}>Period Log Generator</h1>
           <p style={{ color:'#6B778C', fontSize:14, margin:'0 0 24px', lineHeight:1.5 }}>
-            Generate sprint log to Confluence automatically.
+            Generate Kanban period log to Confluence automatically.
           </p>
           <a
             href="/api/auth/login"
@@ -961,7 +910,13 @@ export default function App() {
               fontSize: 20,
             }}
           >
-            📋
+            {/* Kanban board icon */}
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <line x1="9" y1="3" x2="9" y2="21" />
+              <line x1="15" y1="3" x2="15" y2="21" />
+              <line x1="3" y1="9" x2="21" y2="9" />
+            </svg>
           </div>
           <div style={{ flex: 1 }}>
             <h1
@@ -972,15 +927,15 @@ export default function App() {
                 color: '#172B4D',
               }}
             >
-              Sprint Log Generator
+              Period Log Generator
             </h1>
             <p style={{ margin: 0, fontSize: 12, color: '#6B778C' }}>
-              Auto-generate Sprint Log Confluence · A&T Tribe
+              Auto-generate Kanban Period Log · A&T Tribe
             </p>
           </div>
           <div style={{ display:'flex', gap:8, alignItems:'center' }}>
             <a
-              href="/kanban"
+              href="/"
               style={{
                 fontSize: 12,
                 color: '#0052CC',
@@ -989,7 +944,7 @@ export default function App() {
                 fontWeight: 600,
               }}
             >
-              Kanban Mode
+              Sprint Mode
             </a>
             <a
               href="/api/auth/logout"
@@ -1021,7 +976,7 @@ export default function App() {
               gap: 8,
             }}
           >
-            <span>⚠️</span>
+            <span>{'\u26A0\uFE0F'}</span>
             <span style={{ wordBreak: 'break-word' }}>{error}</span>
           </div>
         )}
@@ -1072,95 +1027,63 @@ export default function App() {
                 );
               })}
             </div>
-            <Btn
-              onClick={function () {
-                setError('');
-                setStep(2);
-              }}
-            >
-              Lanjut - Fetch Sprint Goals
+            <Btn onClick={goToStep2}>
+              Lanjut - Set Period & Objectives
             </Btn>
           </Card>
         )}
 
         {step === 2 && (
           <Card>
-            <div
+            <h2
               style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'flex-start',
-                marginBottom: 16,
+                margin: '0 0 16px',
+                fontSize: 15,
+                fontWeight: 700,
+                color: '#172B4D',
               }}
             >
-              <div>
-                <h2
-                  style={{
-                    margin: '0 0 4px',
-                    fontSize: 15,
-                    fontWeight: 700,
-                    color: '#172B4D',
-                  }}
-                >
-                  Sprint Goals — {team.name} Team
-                </h2>
-                <p style={{ margin: 0, fontSize: 13, color: '#6B778C' }}>
-                  Data automatically fetched from active sprint in Jira.
-                </p>
-              </div>
-              <button
-                onClick={function () {
-                  doFetchGoals(pk);
-                }}
-                disabled={fetching}
-                style={{
-                  padding: '6px 14px',
-                  borderRadius: 6,
-                  border: '1px solid #DFE1E6',
-                  background: '#fff',
-                  color: '#0052CC',
-                  fontWeight: 600,
-                  fontSize: 12,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  flexShrink: 0,
-                }}
-              >
-                {fetching ? 'Loading...' : '🔄 Refresh'}
-              </button>
+              Period & Objectives — {team.name} Team
+            </h2>
+
+            {/* Period Presets */}
+            <label style={{ fontSize: 13, fontWeight: 600, color: '#172B4D', display: 'block', marginBottom: 6 }}>
+              Period
+            </label>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+              {Object.keys(PRESET_LABELS).map(function (key) {
+                return (
+                  <button
+                    key={key}
+                    onClick={function () { fillPeriodPreset(key); }}
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      border: '2px solid',
+                      fontWeight: 600,
+                      fontSize: 12,
+                      borderColor: activePreset === key ? '#0052CC' : '#DFE1E6',
+                      background: activePreset === key ? '#E8F0FE' : '#fff',
+                      color: activePreset === key ? '#0052CC' : '#6B778C',
+                    }}
+                  >
+                    {PRESET_LABELS[key]}
+                  </button>
+                );
+              })}
             </div>
 
-            <div style={{ marginBottom: 16 }}>
-              <label
-                style={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: '#172B4D',
-                  display: 'block',
-                  marginBottom: 6,
-                }}
-              >
-                Sprint Aktif
-              </label>
-              {fetching ? (
-                <div
-                  style={{
-                    background: '#F4F5F7',
-                    borderRadius: 6,
-                    padding: '10px 12px',
-                    fontSize: 13,
-                    color: '#97A0AF',
-                  }}
-                >
-                  Fetching sprint data...
-                </div>
-              ) : (
+            {/* Date Range */}
+            <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 11, color: '#6B778C', display: 'block', marginBottom: 4 }}>
+                  Start Date
+                </label>
                 <input
-                  value={sprintName}
-                  onChange={function (e) {
-                    setSprintName(e.target.value);
-                  }}
-                  placeholder="contoh: PRO Sprint #62"
+                  type="date"
+                  value={periodStart}
+                  onChange={function (e) { setPeriodStart(e.target.value); }}
                   style={{
                     width: '100%',
                     border: '1px solid #DFE1E6',
@@ -1171,132 +1094,74 @@ export default function App() {
                     boxSizing: 'border-box',
                   }}
                 />
-              )}
-            </div>
-
-            <div style={{ marginBottom: 16 }}>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: 6,
-                }}
-              >
-                <label
-                  style={{ fontSize: 13, fontWeight: 600, color: '#172B4D' }}
-                >
-                  Sprint Goals
-                </label>
-                {!fetching && rawGoals && (
-                  <span
-                    style={{
-                      fontSize: 11,
-                      background: '#E3FCEF',
-                      color: '#006644',
-                      padding: '2px 8px',
-                      borderRadius: 10,
-                      fontWeight: 600,
-                    }}
-                  >
-                    ✓ Auto-filled dari Jira
-                  </span>
-                )}
-                {!fetching && !rawGoals && (
-                  <span
-                    style={{
-                      fontSize: 11,
-                      background: '#FFFAE6',
-                      color: '#974F0C',
-                      padding: '2px 8px',
-                      borderRadius: 10,
-                      fontWeight: 600,
-                    }}
-                  >
-                    Isi manual
-                  </span>
-                )}
               </div>
-              {fetching ? (
-                <div
-                  style={{
-                    background: '#F4F5F7',
-                    borderRadius: 6,
-                    padding: '40px 12px',
-                    textAlign: 'center',
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 32,
-                      height: 32,
-                      margin: '0 auto 10px',
-                      border: '3px solid #E8F0FE',
-                      borderTop: '3px solid #0052CC',
-                      borderRadius: '50%',
-                      animation: '_sp .9s linear infinite',
-                    }}
-                  />
-                  <p style={{ color: '#6B778C', fontSize: 13, margin: 0 }}>
-                    Fetching sprint goals from Jira...
-                  </p>
-                </div>
-              ) : (
-                <textarea
-                  value={rawGoals}
-                  onChange={function (e) {
-                    setRawGoals(e.target.value);
-                  }}
-                  placeholder={
-                    '1. First goal\n2. Second goal\n\n(Paste from Jira Edit Sprint if auto-fetch fails)'
-                  }
+              <div style={{ flex: 1 }}>
+                <label style={{ fontSize: 11, color: '#6B778C', display: 'block', marginBottom: 4 }}>
+                  End Date
+                </label>
+                <input
+                  type="date"
+                  value={periodEnd}
+                  onChange={function (e) { setPeriodEnd(e.target.value); }}
                   style={{
                     width: '100%',
-                    minHeight: 200,
                     border: '1px solid #DFE1E6',
                     borderRadius: 6,
-                    padding: '10px 12px',
-                    fontSize: 13,
+                    padding: '9px 12px',
+                    fontSize: 14,
                     color: '#172B4D',
-                    resize: 'vertical',
-                    fontFamily: 'monospace',
                     boxSizing: 'border-box',
                   }}
                 />
-              )}
+              </div>
             </div>
 
-            {goalsErr && (
-              <div
+            {/* Period Label */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 13, fontWeight: 600, color: '#172B4D', display: 'block', marginBottom: 6 }}>
+                Period Label
+              </label>
+              <input
+                value={periodLabel}
+                onChange={function (e) { setPeriodLabel(e.target.value); }}
+                placeholder="contoh: Week 26 2026"
                 style={{
-                  background: '#FFFAE6',
-                  border: '1px solid #FFE380',
-                  borderRadius: 8,
-                  padding: '10px 14px',
-                  fontSize: 12,
-                  color: '#974F0C',
-                  marginBottom: 16,
+                  width: '100%',
+                  border: '1px solid #DFE1E6',
+                  borderRadius: 6,
+                  padding: '9px 12px',
+                  fontSize: 14,
+                  color: '#172B4D',
+                  boxSizing: 'border-box',
                 }}
-              >
-                ⚠️ {goalsErr}
-              </div>
-            )}
-            {!goalsErr && rawGoals && !fetching && (
-              <div
+              />
+            </div>
+
+            {/* Objectives */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 13, fontWeight: 600, color: '#172B4D', display: 'block', marginBottom: 6 }}>
+                Period Objectives
+              </label>
+              <textarea
+                value={objectivesText}
+                onChange={function (e) { setObjectivesText(e.target.value); }}
+                placeholder={
+                  '1. First objective\n2. Second objective\n\n(Enter the objectives for this period)'
+                }
                 style={{
-                  background: '#E3FCEF',
-                  border: '1px solid #ABF5D1',
-                  borderRadius: 8,
-                  padding: '10px 14px',
-                  fontSize: 12,
-                  color: '#006644',
-                  marginBottom: 16,
+                  width: '100%',
+                  minHeight: 200,
+                  border: '1px solid #DFE1E6',
+                  borderRadius: 6,
+                  padding: '10px 12px',
+                  fontSize: 13,
+                  color: '#172B4D',
+                  resize: 'vertical',
+                  fontFamily: 'monospace',
+                  boxSizing: 'border-box',
                 }}
-              >
-                ✓ Sprint goals fetched from Jira. Edit if
-                needed.
-              </div>
-            )}
+              />
+            </div>
 
             <div style={{ display: 'flex', gap: 10 }}>
               <Btn
@@ -1308,8 +1173,8 @@ export default function App() {
                 Change Team
               </Btn>
               <Btn
-                onClick={doFetchAndMap}
-                disabled={fetching || !sprintName.trim() || !rawGoals.trim()}
+                onClick={doFetchAndCategorize}
+                disabled={!periodStart || !periodEnd || !periodLabel.trim() || !objectivesText.trim()}
               >
                 Fetch Tickets & Auto-Map
               </Btn>
@@ -1325,6 +1190,7 @@ export default function App() {
 
         {step === 4 && (
           <div>
+            {/* Period Header */}
             <Card style={{ marginBottom: 14 }}>
               <div
                 style={{
@@ -1335,12 +1201,15 @@ export default function App() {
               >
                 <div>
                   <div style={{ fontSize: 12, color: '#6B778C' }}>
-                    Active Sprint - {team.name} Team
+                    Period Log — {team.name} Team
                   </div>
                   <div
                     style={{ fontWeight: 700, color: '#172B4D', fontSize: 16 }}
                   >
-                    {sprintInfo && sprintInfo.name}
+                    {periodLabel}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#6B778C', marginTop: 4 }}>
+                    {periodStart} &rarr; {periodEnd}
                   </div>
                 </div>
                 <div
@@ -1353,23 +1222,46 @@ export default function App() {
                     fontWeight: 600,
                   }}
                 >
-                  {goals.length} Goals
+                  {goals.length} Objectives
                 </div>
               </div>
-              {sprintId && (function(){
-                var cache;
-                try { cache = JSON.parse(localStorage.getItem('sprint_cache') || '{}'); } catch(e) { cache = {}; }
-                var existing = cache[sprintId];
-                if (!existing) return null;
-                return (
-                  <div style={{ marginTop:10, padding:'8px 12px', background:'#FFF0B3', borderRadius:6, fontSize:12, color:'#172B4D' }}>
-                    ⚠ Sprint ini sudah pernah dipublikasikan:{' '}
-                    <a href={existing.url} target="_blank" rel="noopener noreferrer" style={{ color:'#0052CC', textDecoration:'underline' }}>{existing.title}</a>
-                    {' '}— {new Date(existing.createdAt).toLocaleDateString()}
-                  </div>
-                );
-              })()}
             </Card>
+
+            {/* Period Metrics */}
+            {metrics && (
+              <Card style={{ marginBottom: 14 }}>
+                <h3 style={{ margin:'0 0 12px', fontSize:14, fontWeight:700, color:'#172B4D' }}>
+                  Period Metrics
+                </h3>
+                <div style={{ display:'flex', gap:12, flexWrap:'wrap', marginBottom:12 }}>
+                  <div style={{ background:'#F4F5F7', borderRadius:8, padding:'12px 16px', flex:1, minWidth:100, textAlign:'center' }}>
+                    <div style={{ fontSize:24, fontWeight:700, color:'#0052CC' }}>{metrics.totalResolved}</div>
+                    <div style={{ fontSize:11, color:'#6B778C' }}>Resolved</div>
+                  </div>
+                  <div style={{ background:'#F4F5F7', borderRadius:8, padding:'12px 16px', flex:1, minWidth:100, textAlign:'center' }}>
+                    <div style={{ fontSize:24, fontWeight:700, color:'#0052CC' }}>{metrics.throughputPerDay}</div>
+                    <div style={{ fontSize:11, color:'#6B778C' }}>/ day</div>
+                  </div>
+                  <div style={{ background:'#F4F5F7', borderRadius:8, padding:'12px 16px', flex:1, minWidth:100, textAlign:'center' }}>
+                    <div style={{ fontSize:24, fontWeight:700, color:'#0052CC' }}>{metrics.daysInPeriod}</div>
+                    <div style={{ fontSize:11, color:'#6B778C' }}>Days</div>
+                  </div>
+                </div>
+                {Object.keys(metrics.statusCounts || {}).length > 0 && (
+                  <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                    {Object.entries(metrics.statusCounts).map(function (e) {
+                      return (
+                        <span key={e[0]} style={{ padding:'3px 10px', borderRadius:10, background:'#E8F0FE', color:'#0052CC', fontSize:11, fontWeight:600 }}>
+                          {e[0]}: {e[1]}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+              </Card>
+            )}
+
+            {/* Confluence Destination */}
             <Card style={{ marginBottom: 14 }}>
               <h3 style={{ margin:'0 0 10px', fontSize:14, fontWeight:700, color:'#172B4D' }}>
                 Confluence Destination
@@ -1468,6 +1360,8 @@ export default function App() {
                 </div>
               </div>
             </Card>
+
+            {/* Objectives Review */}
             <Card style={{ marginBottom: 14 }}>
               <h3
                 style={{
@@ -1477,16 +1371,17 @@ export default function App() {
                   color: '#172B4D',
                 }}
               >
-                Review dan Edit Sprint Goals
+                Review dan Edit Objectives
               </h3>
               <p style={{ margin: '0 0 14px', fontSize: 13, color: '#6B778C' }}>
-                Status di-derive dari ticket progress. PM/EM bisa adjust sebelum
+                Status di-derive dari ticket completion. PM/EM bisa adjust sebelum
                 dibuat ke Confluence.
               </p>
               {goals.map(function (g, i) {
                 return <GoalCard key={i} goal={g} index={i} onChange={chg} />;
               })}
             </Card>
+
             <div style={{ display: 'flex', gap: 10 }}>
               <Btn
                 secondary
@@ -1494,7 +1389,7 @@ export default function App() {
                   setStep(2);
                 }}
               >
-                Edit Goals
+                Edit Period
               </Btn>
               <Btn onClick={doCreatePage} disabled={loading}>
                 {loading ? 'Creating...' : 'Publish to Confluence'}
@@ -1505,7 +1400,7 @@ export default function App() {
 
         {step === 5 && (
           <Card style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 52, marginBottom: 12 }}>🎉</div>
+            <div style={{ fontSize: 52, marginBottom: 12 }}>{'\uD83C\uDF89'}</div>
             <h2
               style={{
                 margin: '0 0 8px',
@@ -1514,11 +1409,11 @@ export default function App() {
                 color: '#172B4D',
               }}
             >
-              Sprint Log berhasil dibuat!
+              Period Log berhasil dibuat!
             </h2>
             <p style={{ margin: '0 0 24px', color: '#6B778C', fontSize: 14 }}>
-              Document already in Confluence. PM/EM can complete the Sprint
-              Health, Burn Down Chart, dan comment saat sprint review.
+              Document already in Confluence. PM/EM can complete the
+              Issues and Escalation review.
             </p>
             <a
               href={createdUrl}
@@ -1552,7 +1447,7 @@ export default function App() {
                   cursor: 'pointer',
                 }}
               >
-                Generate Sprint Log lagi
+                Generate Period Log lagi
               </button>
             </div>
           </Card>
