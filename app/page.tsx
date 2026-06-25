@@ -575,6 +575,12 @@ export default function App() {
   var pagesErrorState = useState('');
   var pagesError = pagesErrorState[0];
   var setPagesError = pagesErrorState[1];
+  var pagesSearchState = useState('');
+  var pagesSearch = pagesSearchState[0];
+  var setPagesSearch = pagesSearchState[1];
+  var pagesOpenState = useState(false);
+  var pagesOpen = pagesOpenState[0];
+  var setPagesOpen = pagesOpenState[1];
   var selectedParentState = useState('51160186939');
   var selectedParent = selectedParentState[0];
   var setSelectedParent = selectedParentState[1];
@@ -1288,27 +1294,53 @@ export default function App() {
                     {spaces.map(function(s){ return <option key={s.key} value={s.key}>{s.key} - {s.name}</option>; })}
                   </select>
                 </div>
-                <div style={{ flex:1 }}>
+                <div style={{ flex:1, position:'relative' }}>
                   <label style={{ fontSize:11, color:'#6B778C', display:'block', marginBottom:4 }}>Parent Page</label>
-                  <select
-                    value={selectedParent}
-                    onChange={function(e){ setSelectedParent(e.target.value); }}
-                    disabled={pagesLoading || !!pagesError}
-                    style={{
-                      width:'100%', padding:'8px 10px', borderRadius:6, border:'1px solid #DFE1E6',
-                      fontSize:13, background: pagesLoading ? '#F4F5F7' : '#fff', color:'#172B4D',
-                    }}
-                  >
-                    {pagesLoading ? (
-                      <option value="">Loading...</option>
-                    ) : pagesError ? (
-                      <option value="">Error: {pagesError}</option>
-                    ) : pages.length === 0 ? (
-                      <option value="">No pages found in this space</option>
-                    ) : (
-                      pages.map(function(p){ return <option key={p.id} value={p.id}>{p.title}</option>; })
-                    )}
-                  </select>
+                  {pagesLoading ? (
+                    <div style={{ padding:'8px 10px', fontSize:13, color:'#97A0AF', background:'#F4F5F7', borderRadius:6, border:'1px solid #DFE1E6' }}>Loading...</div>
+                  ) : pagesError ? (
+                    <div style={{ padding:'8px 10px', fontSize:13, color:'#BF2600', background:'#FFEBE6', borderRadius:6, border:'1px solid #FFBDAD' }}>Error: {pagesError}</div>
+                  ) : (
+                    <div>
+                      <input
+                        value={pagesOpen ? pagesSearch : (pages.find(function(p){ return p.id === selectedParent; }) || {}).title || ''}
+                        onChange={function(e){ setPagesSearch(e.target.value); setPagesOpen(true); }}
+                        onFocus={function(){ setPagesOpen(true); }}
+                        onBlur={function(){ setTimeout(function(){ setPagesOpen(false); }, 150); }}
+                        placeholder="Search page..."
+                        style={{
+                          width:'100%', padding:'8px 10px', borderRadius:6, border:'1px solid #DFE1E6',
+                          fontSize:13, color:'#172B4D', boxSizing:'border-box',
+                        }}
+                      />
+                      {pagesOpen && (
+                        <div style={{
+                          position:'absolute', top:'100%', left:0, right:0, maxHeight:220, overflowY:'auto',
+                          background:'#fff', border:'1px solid #DFE1E6', borderRadius:6, marginTop:2,
+                          zIndex:10, boxShadow:'0 4px 12px rgba(0,0,0,0.1)',
+                        }}>
+                          {pages.filter(function(p){ return p.title.toLowerCase().indexOf(pagesSearch.toLowerCase()) !== -1; }).length === 0 ? (
+                            <div style={{ padding:'10px 12px', fontSize:12, color:'#97A0AF' }}>No pages found</div>
+                          ) : (
+                            pages.filter(function(p){ return p.title.toLowerCase().indexOf(pagesSearch.toLowerCase()) !== -1; }).map(function(p){
+                              var sel = p.id === selectedParent;
+                              return (
+                                <div key={p.id}
+                                  onClick={function(){ setSelectedParent(p.id); setPagesOpen(false); setPagesSearch(''); }}
+                                  style={{
+                                    padding:'8px 12px', fontSize:13, cursor:'pointer',
+                                    background: sel ? '#E8F0FE' : '#fff', color: sel ? '#0052CC' : '#172B4D',
+                                    fontWeight: sel ? 600 : 400,
+                                    borderBottom:'1px solid #F4F5F7',
+                                  }}
+                                >{p.title}</div>
+                              );
+                            })
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </Card>
