@@ -42,7 +42,7 @@ export async function GET(request: Request) {
     if (action === 'pages') {
       const spaceKey = searchParams.get('spaceKey') || 'PD';
       const res = await conFetch(
-        `${baseUrl}/wiki/rest/api/content?spaceKey=${spaceKey}&type=page&limit=100`
+        `${baseUrl}/wiki/rest/api/content?spaceKey=${spaceKey}&type=page&limit=200`
       );
       if (!res.ok) return NextResponse.json({ error: 'Gagal fetch pages: ' + (res.data?.message || JSON.stringify(res.data)) }, { status: 500 });
       return NextResponse.json({
