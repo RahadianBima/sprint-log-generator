@@ -28,7 +28,7 @@ export async function GET(request: Request) {
 
     // Fetch spaces
     if (action === 'spaces') {
-      const res = await conFetch(`${baseUrl}/wiki/rest/api/space?limit=100`);
+      const res = await conFetch(`${baseUrl}/wiki/rest/api/space?type=global&limit=100`);
       if (!res.ok) return NextResponse.json({ error: 'Gagal fetch spaces' }, { status: 500 });
       return NextResponse.json({
         spaces: (res.data.results || []).map((s: any) => ({
