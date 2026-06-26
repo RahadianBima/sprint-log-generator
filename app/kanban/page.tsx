@@ -1249,7 +1249,7 @@ export default function App() {
                     {Object.entries(metrics.statusCounts).map(function (e) {
                       return (
                         <span key={e[0]} style={{ padding:'3px 10px', borderRadius:10, background:'#E8F0FE', color:'#0052CC', fontSize:11, fontWeight:600 }}>
-                          {e[0]}: {e[1]}
+                          {e[0]}: {String(e[1])}
                         </span>
                       );
                     })}
