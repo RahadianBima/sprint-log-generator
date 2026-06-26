@@ -142,6 +142,67 @@ export default function HomePage() {
           </span>
         </a>
       </div>
+
+      <div
+        style={{
+          marginTop: '3.5rem',
+          maxWidth: 720,
+          width: '100%',
+          padding: '0 1rem',
+        }}
+      >
+        <h2
+          style={{
+            fontSize: '1.1rem',
+            fontWeight: 600,
+            color: '#172B4D',
+            marginBottom: '1rem',
+            textAlign: 'center',
+          }}
+        >
+          How It Works
+        </h2>
+
+        <div
+          style={{
+            background: '#fff',
+            borderRadius: 12,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            padding: '1.5rem 2rem',
+            marginBottom: '1rem',
+          }}
+        >
+          <h3 style={{ fontSize: '1rem', fontWeight: 600, color: '#0052CC', marginBottom: '0.75rem' }}>
+            🏃 Sprint Log
+          </h3>
+          <ol style={{ margin: 0, paddingLeft: '1.25rem', lineHeight: 1.8, color: '#172B4D', fontSize: '0.9rem' }}>
+            <li><strong>Select Team</strong> — choose your Jira team/board (COS, PRO, FIN, etc.)</li>
+            <li><strong>Fetch Sprint</strong> — app automatically finds the active sprint for that board</li>
+            <li><strong>Review & AI Mapping</strong> — AI maps sprint goals to completed tickets, generates status & detailed comment for each goal</li>
+            <li><strong>Publish</strong> — review the result, select Confluence space & parent page, then publish</li>
+          </ol>
+        </div>
+
+        <div
+          style={{
+            background: '#fff',
+            borderRadius: 12,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            padding: '1.5rem 2rem',
+          }}
+        >
+          <h3 style={{ fontSize: '1rem', fontWeight: 600, color:'#0052CC', marginBottom: '0.75rem' }}>
+            📋 Period Log
+          </h3>
+          <ol style={{ margin: 0, paddingLeft: '1.25rem', lineHeight: 1.8, color: '#172B4D', fontSize: '0.9rem' }}>
+            <li><strong>Select Team</strong> — choose your Jira team/board</li>
+            <li><strong>Set Period & Objectives</strong> — enter date range, period label, and list of objectives for this period</li>
+            <li><strong>Fetch Tickets</strong> — app queries Jira for completed/resolved tickets in the date range</li>
+            <li><strong>Review</strong> — AI maps tickets to objectives, shows throughput metrics, and generates detailed status & comment for each objective</li>
+            <li><strong>Publish</strong> — select Confluence space & parent page, then publish the period log</li>
+          </ol>
+        </div>
+      </div>
     </div>
   );
 }
