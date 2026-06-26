@@ -787,15 +787,23 @@ export default function App() {
 
         return Promise.all([
           anthropicJSON(
-            'Sprint analyst. Return ONLY minified JSON no whitespace no markdown.',
+            'You are an experienced engineering manager writing a detailed sprint-end report. Return ONLY minified JSON no whitespace no markdown.',
             'Goals:\n' +
               goalStr +
               '\nTickets (each has key, type=Story/Task/Subtask, parentKey):\n' +
               ticketLines +
-              '\nFor each goal: find relevant ticketKeys (stories and their subtasks), derive status(achieved/partially achieved/not achieved/invalid), 1-sentence English comment.' +
+              '\nFor each goal:\n' +
+              '1. Find relevant ticketKeys (stories and their subtasks)\n' +
+              '2. Derive status: achieved / partially achieved / not achieved / invalid\n' +
+              '3. Write a DETAILED comment (3-5 sentences) covering:\n' +
+              '   - What was accomplished and key outcomes\n' +
+              '   - Notable challenges or blockers encountered\n' +
+              '   - Dependencies or cross-team coordination involved\n' +
+              '   - Quality notes or areas needing follow-up\n' +
+              '4. If status is partially achieved, explain what remains and why.\n' +
               '\nReturn: {"goals":[{"text":"...","status":"...","ticketKeys":["' +
               pk +
-              '-1"],"comment":"..."}]}'
+              '-1"],"comment":"detailed multi-sentence comment here"}]}'
           ),
           reportPromise,
         ]).then(function (results) {
