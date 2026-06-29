@@ -985,17 +985,20 @@ export default function App() {
               Auto-generate Sprint Log Confluence · A&T Tribe
             </p>
           </div>
-          <a
-            href="/api/auth/logout"
-            style={{
-              fontSize: 12,
-              color: '#97A0AF',
-              textDecoration: 'none',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Logout
-          </a>
+          <div style={{ display:'flex', gap:12, alignItems:'center' }}>
+            <a href="/" style={{ fontSize:12, color:'#97A0AF', textDecoration:'none' }}>Home</a>
+            <a
+              href="/api/auth/logout"
+              style={{
+                fontSize: 12,
+                color: '#97A0AF',
+                textDecoration: 'none',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Logout
+            </a>
+          </div>
         </div>
 
         <Steps cur={step} />
