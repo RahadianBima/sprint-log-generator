@@ -987,7 +987,7 @@ export default function App() {
           </div>
           <div style={{ display:'flex', gap:12, alignItems:'center' }}>
             <a href="/" className="nav-link">Home</a>
-            <a href="/api/auth/logout" className="nav-link" style={{ whiteSpace:'nowrap' }}>Logout</a>
+            <a href="/api/auth/logout" className="nav-link nav-link-danger" style={{ whiteSpace:'nowrap' }}>Logout</a>
           </div>
         </div>
 

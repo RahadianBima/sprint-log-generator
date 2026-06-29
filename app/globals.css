@@ -36,3 +36,6 @@ body {
 .nav-link:hover {
   color: #0052CC;
 }
+.nav-link-danger:hover {
+  color: #DE350B;
+}
