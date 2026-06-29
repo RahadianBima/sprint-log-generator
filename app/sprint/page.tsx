@@ -986,18 +986,8 @@ export default function App() {
             </p>
           </div>
           <div style={{ display:'flex', gap:12, alignItems:'center' }}>
-            <a href="/" style={{ fontSize:12, color:'#97A0AF', textDecoration:'none' }}>Home</a>
-            <a
-              href="/api/auth/logout"
-              style={{
-                fontSize: 12,
-                color: '#97A0AF',
-                textDecoration: 'none',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              Logout
-            </a>
+            <a href="/" className="nav-link">Home</a>
+            <a href="/api/auth/logout" className="nav-link" style={{ whiteSpace:'nowrap' }}>Logout</a>
           </div>
         </div>
 

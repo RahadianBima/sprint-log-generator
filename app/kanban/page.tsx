@@ -870,7 +870,7 @@ export default function App() {
       <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#F4F5F7', fontFamily:'Inter,-apple-system,sans-serif' }}>
         <div style={{ textAlign:'center', maxWidth:400 }}>
           <div style={{ textAlign:'right', marginBottom:16 }}>
-            {user === null ? '' : <span><a href="/" style={{ fontSize:12, color:'#97A0AF', textDecoration:'none', marginRight:12 }}>Home</a><a href="/api/auth/logout" style={{ fontSize:12, color:'#97A0AF', textDecoration:'none' }}>Logout</a></span>}
+            {user === null ? '' : <span><a href="/" className="nav-link" style={{ marginRight:12 }}>Home</a><a href="/api/auth/logout" className="nav-link">Logout</a></span>}
           </div>
           <h1 style={{ color:'#172B4D', fontSize:28, margin:'0 0 8px' }}>Period Log Generator</h1>
           <p style={{ color:'#6B778C', fontSize:14, margin:'0 0 24px', lineHeight:1.5 }}>
@@ -945,18 +945,8 @@ export default function App() {
             </p>
           </div>
           <div style={{ display:'flex', gap:12, alignItems:'center' }}>
-            <a href="/" style={{ fontSize:12, color:'#97A0AF', textDecoration:'none' }}>Home</a>
-            <a
-              href="/api/auth/logout"
-              style={{
-                fontSize: 12,
-                color: '#97A0AF',
-                textDecoration: 'none',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              Logout
-            </a>
+            <a href="/" className="nav-link">Home</a>
+            <a href="/api/auth/logout" className="nav-link" style={{ whiteSpace:'nowrap' }}>Logout</a>
           </div>
         </div>
 
