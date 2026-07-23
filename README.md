@@ -5,14 +5,14 @@ App Next.js untuk generate Sprint Log ke Confluence secara otomatis dari data Ji
 ## Features
 - Atlassian OAuth 2.0 login
 - Fetch active sprint goals & health from Jira
-- AI mapping goals → tickets via Anthropic Claude (default claude-haiku-4-5, configurable via ANTHROPIC_MODEL)
+- AI mapping goals → tickets via Groq (Llama 3.3 70B)
 - Sprint Health & Burndown chart
 - Publish to Confluence with Space & Parent Page selector
 - Caching: menyimpan hasil publish + duplicate prevention
 - English UI (all text)
 
 ## Env Vars (Vercel)
-JIRA_USER_EMAIL, JIRA_API_TOKEN, ANTHROPIC_API_KEY, ANTHROPIC_MODEL (optional), JIRA_BASE_URL,
+JIRA_USER_EMAIL, JIRA_API_TOKEN, GROQ_API_KEY, JIRA_BASE_URL,
 CONFLUENCE_SPACE_KEY, CONFLUENCE_PARENT_ID, ATLASSIAN_CLIENT_ID,
 ATLASSIAN_CLIENT_SECRET, ATLASSIAN_REDIRECT_URI, JWT_SECRET
 
